@@ -1,0 +1,5 @@
+{
+  "name": "RealityDB Studio",
+  "description": "A schema-to-data design workbench for defining relational structures and validating them with realistic synthetic data.",
+  "requestFramePermissions": []
+}
