@@ -72,8 +72,9 @@ interface SchemaState {
   simulation: SimulationConfig;
   selectedTableId: string | null;
   selectedColumnId: string | null;
+  selectedRelationshipId: string | null;
   
-  previewMode: 'table' | 'system' | 'temporal' | 'forecast';
+  previewMode: 'table' | 'system' | 'temporal' | 'forecast' | 'flow';
   selectedRootRecordId: string | null;
   
   calculateForecast: () => {
@@ -82,7 +83,7 @@ interface SchemaState {
     tableForecasts: { tableName: string; rowCount: number; growthRate: number }[];
   };
   
-  setPreviewMode: (mode: 'table' | 'system' | 'temporal' | 'forecast') => void;
+  setPreviewMode: (mode: 'table' | 'system' | 'temporal' | 'forecast' | 'flow') => void;
   setSelectedRootRecordId: (id: string | null) => void;
   updateSimulation: (updates: Partial<SimulationConfig>) => void;
   
@@ -107,6 +108,7 @@ interface SchemaState {
   removeRelationship: (id: string) => void;
   
   setSelected: (tableId: string | null, columnId: string | null) => void;
+  setSelectedRelationship: (id: string | null) => void;
 }
 
 export const useSchemaStore = create<SchemaState>()(
@@ -122,27 +124,45 @@ export const useSchemaStore = create<SchemaState>()(
       },
       selectedTableId: null,
       selectedColumnId: null,
+      selectedRelationshipId: null,
       previewMode: 'table',
       selectedRootRecordId: null,
 
       setPreviewMode: (mode) => set({ previewMode: mode }),
       setSelectedRootRecordId: (id) => set({ selectedRootRecordId: id }),
   calculateForecast: () => {
-    const { tables, simulation } = get();
+    const { tables, simulation, relationships } = get();
     const days = simulation.timelineDays;
     const curve = simulation.growthCurve;
     
     let totalRows = 0;
     const tableForecasts = tables.map(table => {
-      const baseRows = 1000; // Base assumption
+      // Base rows for root tables (no incoming FKs)
+      const isRoot = !relationships.some(r => r.targetTableId === table.id);
+      let baseRows = isRoot ? 1000 : 0;
+      
+      // If not root, rows are derived from parents
+      if (!isRoot) {
+        const parentRels = relationships.filter(r => r.targetTableId === table.id);
+        parentRels.forEach(rel => {
+          const parentTable = tables.find(t => t.id === rel.sourceTableId);
+          if (parentTable) {
+            // Estimate parent rows and apply a multiplier (e.g., 3-5x for 1:N)
+            const parentBase = 1000; 
+            baseRows += parentBase * (rel.type === 'one-to-many' ? 4 : 1);
+          }
+        });
+      }
+
+      if (baseRows === 0) baseRows = 500; // Fallback
+      
       let multiplier = 1;
-      
       if (curve === 'linear') multiplier = 1.0;
-      if (curve === 'exponential') multiplier = 2.5;
-      if (curve === 'logarithmic') multiplier = 0.5;
-      if (curve === 's-curve') multiplier = 1.5;
+      if (curve === 'exponential') multiplier = Math.pow(1.05, days / 30);
+      if (curve === 'logarithmic') multiplier = Math.log10(days + 10);
+      if (curve === 's-curve') multiplier = 1 / (1 + Math.exp(-((days - 180) / 60))) * 5;
       
-      const rowCount = Math.floor(baseRows * multiplier * (days / 30));
+      const rowCount = Math.floor(baseRows * multiplier);
       const growthRate = Math.floor(multiplier * 15);
       totalRows += rowCount;
       
@@ -359,7 +379,16 @@ export const useSchemaStore = create<SchemaState>()(
         relationships: state.relationships.filter((r) => r.id !== id),
       })),
 
-      setSelected: (tableId, columnId) => set({ selectedTableId: tableId, selectedColumnId: columnId }),
+      setSelected: (tableId, columnId) => set({ 
+        selectedTableId: tableId, 
+        selectedColumnId: columnId,
+        selectedRelationshipId: null 
+      }),
+      setSelectedRelationship: (id) => set({ 
+        selectedRelationshipId: id,
+        selectedTableId: null,
+        selectedColumnId: null
+      }),
     }),
     {
       name: 'reality-db-storage',

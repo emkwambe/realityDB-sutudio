@@ -179,6 +179,13 @@ export default function PreviewPanel() {
             <BarChart3 size={14} />
             Forecast
           </button>
+          <button 
+            onClick={() => setPreviewMode('flow')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'flow' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <ArrowRight size={14} />
+            System Flow
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -332,15 +339,25 @@ export default function PreviewPanel() {
               className="h-full p-8 overflow-y-auto bg-slate-50/30"
             >
               <div className="max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-12">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Temporal Lifecycle</h2>
-                    <p className="text-sm text-slate-500">Simulating data evolution for {activeRootRecord?.email || activeRootRecord?.id}</p>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200">
-                    <span className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-md">
-                      {simulation.timelineDays} Days Simulation
-                    </span>
+                <div className="flex items-center justify-between mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-800">Temporal Lifecycle</h2>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Simulating: {activeRootRecord?.email || activeRootRecord?.id}</p>
+                    </div>
+                    <div className="h-8 w-px bg-slate-100"></div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Scrub Timeline</span>
+                      <input 
+                        type="range"
+                        min="1"
+                        max="365"
+                        value={simulation.timelineDays}
+                        onChange={(e) => updateSimulation({ timelineDays: parseInt(e.target.value) })}
+                        className="w-48 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <span className="text-xs font-mono font-bold text-indigo-600">{simulation.timelineDays}d</span>
+                    </div>
                   </div>
                 </div>
 
@@ -455,6 +472,70 @@ export default function PreviewPanel() {
                       </ResponsiveContainer>
                     </div>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          {previewMode === 'flow' && (
+            <motion.div 
+              key="flow"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="h-full p-12 bg-slate-50/50 overflow-y-auto"
+            >
+              <div className="max-w-4xl mx-auto">
+                <div className="text-center mb-16">
+                  <h2 className="text-3xl font-bold text-slate-800 mb-2">System Dynamics</h2>
+                  <p className="text-slate-500">Visualizing cardinality and data flow across the relational graph</p>
+                </div>
+
+                <div className="flex flex-col items-center gap-8">
+                  {tables.map((table, idx) => {
+                    const tableForecast = forecast.tableForecasts.find(f => f.tableName === table.name);
+                    const rowCount = tableForecast?.rowCount || 0;
+                    
+                    return (
+                      <React.Fragment key={table.id}>
+                        <div className="w-full max-w-md bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                              <Database size={24} />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-800">{table.name}</h4>
+                              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{table.columns.length} Columns</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-slate-800">{(rowCount / 1000).toFixed(1)}k</div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">Estimated Rows</p>
+                          </div>
+                        </div>
+                        
+                        {idx < tables.length - 1 && (() => {
+                          const nextTable = tables[idx + 1];
+                          const rel = relationships.find(r => 
+                            (r.sourceTableId === table.id && r.targetTableId === nextTable.id) ||
+                            (r.sourceTableId === nextTable.id && r.targetTableId === table.id)
+                          );
+                          
+                          const nextTableForecast = forecast.tableForecasts.find(f => f.tableName === nextTable.name);
+                          const nextRowCount = nextTableForecast?.rowCount || 0;
+                          const multiplier = rowCount > 0 ? (nextRowCount / rowCount).toFixed(1) : '1.0';
+
+                          return (
+                            <div className="flex flex-col items-center gap-2">
+                              <div className={`w-0.5 h-12 bg-gradient-to-b ${rel ? 'from-indigo-500 to-emerald-500' : 'from-slate-200 to-slate-200'} rounded-full`}></div>
+                              <div className="px-3 py-1 bg-white border border-slate-100 rounded-full text-[10px] font-bold text-slate-400 shadow-sm">
+                                {rel ? `${multiplier}x Multiplier` : 'No Direct Link'}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>

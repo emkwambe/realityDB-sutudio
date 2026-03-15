@@ -19,11 +19,15 @@ import { Database, Plus, Trash2, Key, Link, X, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const TableNode = ({ data, selected }: NodeProps<Table>) => {
-  const { setSelected, addColumn, removeTable } = useSchemaStore();
+  const { setSelected, addColumn, removeTable, selectedRelationshipId, relationships } = useSchemaStore();
   
+  const selectedRel = relationships.find(r => r.id === selectedRelationshipId);
+  const isRelatedSource = selectedRel?.sourceTableId === data.id;
+  const isRelatedTarget = selectedRel?.targetTableId === data.id;
+
   return (
     <div 
-      className={`react-flow__node-table overflow-hidden transition-all ${selected ? 'ring-2 ring-indigo-500' : ''}`}
+      className={`react-flow__node-table overflow-hidden transition-all ${selected ? 'ring-2 ring-indigo-500' : ''} ${isRelatedSource || isRelatedTarget ? 'ring-2 ring-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]' : ''}`}
       onClick={() => setSelected(data.id, null)}
     >
       <div className="bg-slate-50 border-bottom border-slate-200 p-3 flex items-center justify-between relative">
@@ -46,32 +50,39 @@ const TableNode = ({ data, selected }: NodeProps<Table>) => {
       </div>
       
       <div className="p-2 space-y-1">
-        {data.columns.map((col) => (
-          <div 
-            key={col.id}
-            className="flex items-center justify-between p-1.5 rounded hover:bg-slate-50 cursor-pointer group relative"
-            onClick={(e) => { e.stopPropagation(); setSelected(data.id, col.id); }}
-          >
-            <Handle 
-              type="target" 
-              position={Position.Left} 
-              id={col.id} 
-              className="!w-2 !h-2 !bg-slate-300 opacity-0 group-hover:opacity-100 transition-opacity !-left-1" 
-            />
-            <div className="flex items-center gap-2">
-              {col.isPK && <Key size={12} className="text-amber-500" />}
-              {col.isFK && <Link size={12} className="text-indigo-500" />}
-              <span className="text-xs text-slate-700 font-medium">{col.name}</span>
+        {data.columns.map((col) => {
+          const isSelectedCol = (isRelatedSource && selectedRel?.sourceColumnId === col.id) || 
+                               (isRelatedTarget && selectedRel?.targetColumnId === col.id);
+          
+          return (
+            <div 
+              key={col.id}
+              className={`flex items-center justify-between p-1.5 rounded hover:bg-slate-50 cursor-pointer group relative transition-colors ${isSelectedCol ? 'bg-purple-50 text-purple-700' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setSelected(data.id, col.id); }}
+            >
+              <Handle 
+                type="target" 
+                position={Position.Left} 
+                id={col.id} 
+                className="!w-2 !h-2 !bg-slate-300 opacity-0 group-hover:opacity-100 transition-opacity !-left-1" 
+              />
+              <div className="flex items-center gap-2">
+                {col.isPK && <Key size={12} className={isSelectedCol ? 'text-purple-500' : 'text-amber-500'} />}
+                {col.isFK && <Link size={12} className={isSelectedCol ? 'text-purple-500' : 'text-indigo-500'} />}
+                <span className={`text-xs font-medium ${isSelectedCol ? 'text-purple-700' : 'text-slate-700'}`}>{col.name}</span>
+              </div>
+              <span className={`text-[10px] uppercase font-mono ${isSelectedCol ? 'text-purple-400' : 'text-slate-400'}`}>{col.type}</span>
+              {col.isPK && (
+                <Handle 
+                  type="source" 
+                  position={Position.Right} 
+                  id={col.id} 
+                  className="!w-2.5 !h-2.5 !bg-indigo-500 !border-2 !border-white !-right-1.25 shadow-sm" 
+                />
+              )}
             </div>
-            <span className="text-[10px] text-slate-400 uppercase font-mono">{col.type}</span>
-            <Handle 
-              type="source" 
-              position={Position.Right} 
-              id={col.id} 
-              className="!w-2 !h-2 !bg-slate-300 opacity-0 group-hover:opacity-100 transition-opacity !-right-1" 
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
       
       <button 
@@ -90,7 +101,7 @@ const nodeTypes = {
 };
 
 export default function SchemaCanvas() {
-  const { tables, relationships, updateTable, createRelationshipWithFK } = useSchemaStore();
+  const { tables, relationships, updateTable, createRelationshipWithFK, selectedRelationshipId, setSelectedRelationship } = useSchemaStore();
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [relType, setRelType] = useState<'one-to-many' | 'one-to-one'>('one-to-many');
   const [createFK, setCreateFK] = useState(true);
@@ -103,15 +114,27 @@ export default function SchemaCanvas() {
     data: t,
   })), [tables]);
 
-  const edges = useMemo(() => relationships.map(r => ({
-    id: r.id,
-    source: r.sourceTableId,
-    target: r.targetTableId,
-    sourceHandle: r.sourceColumnId,
-    targetHandle: r.targetColumnId,
-    markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
-    style: { stroke: '#6366f1', strokeWidth: 2 },
-  })), [relationships]);
+  const edges = useMemo(() => relationships.map(r => {
+    const isSelected = r.id === selectedRelationshipId;
+    return {
+      id: r.id,
+      source: r.sourceTableId,
+      target: r.targetTableId,
+      sourceHandle: r.sourceColumnId,
+      targetHandle: r.targetColumnId,
+      markerEnd: { type: MarkerType.ArrowClosed, color: isSelected ? '#a855f7' : '#6366f1' },
+      style: { 
+        stroke: isSelected ? '#a855f7' : '#6366f1', 
+        strokeWidth: isSelected ? 3 : 2,
+        filter: isSelected ? 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.6))' : 'none'
+      },
+      animated: isSelected,
+    };
+  }), [relationships, selectedRelationshipId]);
+
+  const onEdgeClick = useCallback((_: React.MouseEvent, edge: any) => {
+    setSelectedRelationship(edge.id);
+  }, [setSelectedRelationship]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     changes.forEach(change => {
@@ -163,6 +186,7 @@ export default function SchemaCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onConnect={onConnect}
+        onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
         fitView
       >
