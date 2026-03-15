@@ -1,9 +1,10 @@
 import React from 'react';
-import { useSchemaStore, DOMAIN_TEMPLATES, DataType } from './store';
+import { useSchemaStore } from './store';
+import { DataType } from './types';
+import { REALITY_TEMPLATES } from './templates';
 import { 
   Plus, 
   ShoppingBag, 
-  Database, 
   Mail, 
   Hash, 
   Calendar, 
@@ -11,21 +12,20 @@ import {
   Layout,
   Briefcase,
   Phone,
-  CheckSquare
+  CheckSquare,
+  Globe,
+  Shield,
+  Cpu,
+  GraduationCap,
+  Stethoscope,
+  Truck,
+  CreditCard,
+  Rocket,
+  Activity
 } from 'lucide-react';
 
 export default function Sidebar() {
-  const { addTable, addColumn, selectedTableId } = useSchemaStore();
-
-  const addDomainTemplate = (name: string, tablesData: any[]) => {
-    tablesData.forEach((t, i) => {
-      addTable({
-        name: t.name,
-        columns: t.columns,
-        position: { x: 100 + (i * 300), y: 100 + (i * 50) }
-      });
-    });
-  };
+  const { addTable, addColumn, selectedTableId, loadTemplate } = useSchemaStore();
 
   const quickFields = [
     { name: 'id', type: 'uuid', strategy: 'uuid', icon: <Hash size={14} /> },
@@ -36,12 +36,38 @@ export default function Sidebar() {
     { name: 'status', type: 'enum', strategy: 'enum', icon: <CheckSquare size={14} /> },
   ];
 
+  const categoryIcons: Record<string, React.ReactNode> = {
+    'Startup': <Rocket size={16} />,
+    'Commerce': <ShoppingBag size={16} />,
+    'Finance': <CreditCard size={16} />,
+    'Operations': <Truck size={16} />,
+    'Public Sector': <Stethoscope size={16} />,
+    'Security': <Shield size={16} />,
+    'AI': <Cpu size={16} />,
+  };
+
+  const categoryColors: Record<string, string> = {
+    'Startup': 'bg-indigo-50 text-indigo-600',
+    'Commerce': 'bg-emerald-50 text-emerald-600',
+    'Finance': 'bg-amber-50 text-amber-600',
+    'Operations': 'bg-blue-50 text-blue-600',
+    'Public Sector': 'bg-rose-50 text-rose-600',
+    'Security': 'bg-slate-100 text-slate-600',
+    'AI': 'bg-purple-50 text-purple-600',
+  };
+
+  const groupedTemplates = REALITY_TEMPLATES.reduce((acc, template) => {
+    if (!acc[template.category]) acc[template.category] = [];
+    acc[template.category].push(template);
+    return acc;
+  }, {} as Record<string, typeof REALITY_TEMPLATES>);
+
   return (
-    <div className="w-64 border-r border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
-      <div className="p-4 border-b border-slate-100 bg-slate-50">
+    <div className="w-64 border-r border-slate-200 bg-white flex flex-col h-full overflow-y-auto scrollbar-hide">
+      <div className="p-4 border-b border-slate-100 bg-slate-50 sticky top-0 z-10">
         <h2 className="font-semibold text-slate-800 flex items-center gap-2">
           <Layout size={16} className="text-indigo-600" />
-          Component Library
+          RealityDB Studio
         </h2>
       </div>
 
@@ -58,34 +84,34 @@ export default function Sidebar() {
           </button>
         </section>
 
-        {/* Domain Intelligence Templates */}
+        {/* Domain Templates */}
         <section>
           <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Domain Templates</h3>
-          <div className="space-y-2">
-            <button 
-              onClick={() => addDomainTemplate('SaaS', DOMAIN_TEMPLATES.SaaS)}
-              className="w-full flex items-center gap-3 p-2 text-xs text-slate-600 hover:bg-slate-50 rounded-md border border-transparent hover:border-slate-100 transition-all text-left"
-            >
-              <div className="w-8 h-8 bg-indigo-50 rounded flex items-center justify-center text-indigo-600">
-                <Briefcase size={16} />
+          <div className="space-y-6">
+            {Object.entries(groupedTemplates).map(([category, templates]) => (
+              <div key={category} className="space-y-2">
+                <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1">
+                  {categoryIcons[category]}
+                  {category}
+                </div>
+                <div className="space-y-1">
+                  {templates.map(template => (
+                    <button 
+                      key={template.name}
+                      onClick={() => {
+                        if (confirm(`Load "${template.name}" template? This will replace your current schema.`)) {
+                          loadTemplate(template);
+                        }
+                      }}
+                      className="w-full flex flex-col p-2 text-left hover:bg-slate-50 rounded-md border border-transparent hover:border-slate-100 transition-all group"
+                    >
+                      <span className="text-xs font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors">{template.name}</span>
+                      <span className="text-[9px] text-slate-400 line-clamp-2 mt-0.5 leading-tight">{template.description}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <p className="font-semibold">SaaS Stack</p>
-                <p className="text-[10px] text-slate-400">Users, Orgs, Subs</p>
-              </div>
-            </button>
-            <button 
-              onClick={() => addDomainTemplate('Ecommerce', DOMAIN_TEMPLATES.Ecommerce)}
-              className="w-full flex items-center gap-3 p-2 text-xs text-slate-600 hover:bg-slate-50 rounded-md border border-transparent hover:border-slate-100 transition-all text-left"
-            >
-              <div className="w-8 h-8 bg-emerald-50 rounded flex items-center justify-center text-emerald-600">
-                <ShoppingBag size={16} />
-              </div>
-              <div>
-                <p className="font-semibold">E-commerce</p>
-                <p className="text-[10px] text-slate-400">Customers, Products, Orders</p>
-              </div>
-            </button>
+            ))}
           </div>
         </section>
 

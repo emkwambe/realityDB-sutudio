@@ -11,11 +11,14 @@ import ReactFlow, {
   EdgeChange,
   Connection,
   addEdge,
-  MarkerType
+  MarkerType,
+  EdgeProps,
+  getBezierPath
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { useSchemaStore, Table, Column } from './store';
-import { Database, Plus, Trash2, Key, Link, X, Check } from 'lucide-react';
+import { useSchemaStore } from './store';
+import { Table, Column, SEMANTIC_COLORS, SEMANTIC_LABELS, RelationshipSemantic, Relationship } from './types';
+import { Database, Plus, Trash2, Key, Link, X, Check, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const TableNode = ({ data, selected }: NodeProps<Table>) => {
@@ -96,14 +99,121 @@ const TableNode = ({ data, selected }: NodeProps<Table>) => {
   );
 };
 
+const CustomEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  data,
+}: EdgeProps) => {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  const [isHovered, setIsHovered] = useState(false);
+  const semantic = data?.semantic as RelationshipSemantic || 'connection';
+  const color = SEMANTIC_COLORS[semantic];
+  const label = SEMANTIC_LABELS[semantic];
+
+  return (
+    <>
+      <path
+        id={id}
+        style={{ ...style, stroke: color, strokeWidth: isHovered ? 4 : 2 }}
+        className="react-flow__edge-path transition-all duration-300"
+        d={edgePath}
+        markerEnd={markerEnd}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      />
+      <path
+        d={edgePath}
+        fill="none"
+        strokeOpacity={0}
+        strokeWidth={20}
+        className="cursor-pointer"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      />
+      <AnimatePresence>
+        {isHovered && (
+          <foreignObject
+            width={200}
+            height={80}
+            x={labelX - 100}
+            y={labelY - 40}
+            className="pointer-events-none overflow-visible"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 10 }}
+              className="bg-slate-900 text-white p-2.5 rounded-lg shadow-2xl text-[10px] flex flex-col gap-2 border border-slate-700 backdrop-blur-md bg-opacity-95 min-w-[160px]"
+            >
+              <div className="flex items-center justify-between border-b border-slate-700 pb-1.5 mb-0.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="font-bold uppercase tracking-wider">{label}</span>
+                </div>
+                <div className="flex items-center gap-1 text-slate-400 font-mono text-[9px]">
+                  <span>{data?.sourceName}</span>
+                  <span>→</span>
+                  <span>{data?.targetName}</span>
+                </div>
+              </div>
+              <p className="text-slate-300 leading-relaxed">
+                {semantic === 'trigger' && 'When source record is created, target records may be generated.'}
+                {semantic === 'temporal' && 'Target record timestamps are logically dependent on source.'}
+                {semantic === 'lifecycle' && 'State changes in source affect target record availability.'}
+                {semantic === 'risk' && 'Source behavior may trigger anomaly or fraud flags in target.'}
+                {semantic === 'activity' && 'Source user actions generate target event stream data.'}
+                {semantic === 'connection' && 'Standard relational link between tables.'}
+              </p>
+            </motion.div>
+          </foreignObject>
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
 const nodeTypes = {
   table: TableNode,
 };
+
+const edgeTypes = {
+  custom: CustomEdge,
+};
+
+const Legend = () => (
+  <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-md p-3 rounded-lg border border-slate-200 shadow-lg z-10 space-y-2">
+    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1 mb-2">System Semantics</h4>
+    <div className="grid grid-cols-1 gap-2">
+      {(Object.entries(SEMANTIC_LABELS) as [RelationshipSemantic, string][]).map(([key, label]) => (
+        <div key={key} className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: SEMANTIC_COLORS[key] }} />
+          <span className="text-[10px] font-medium text-slate-600">{label}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 export default function SchemaCanvas() {
   const { tables, relationships, updateTable, createRelationshipWithFK, selectedRelationshipId, setSelectedRelationship } = useSchemaStore();
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [relType, setRelType] = useState<'one-to-many' | 'one-to-one'>('one-to-many');
+  const [semantic, setSemantic] = useState<RelationshipSemantic>('connection');
   const [createFK, setCreateFK] = useState(true);
   const [customFKName, setCustomFKName] = useState('');
 
@@ -116,19 +226,29 @@ export default function SchemaCanvas() {
 
   const edges = useMemo(() => relationships.map(r => {
     const isSelected = r.id === selectedRelationshipId;
+    const color = SEMANTIC_COLORS[r.semantic || 'connection'];
+    const sourceTable = tables.find(t => t.id === r.sourceTableId);
+    const targetTable = tables.find(t => t.id === r.targetTableId);
+    
     return {
       id: r.id,
+      type: 'custom',
       source: r.sourceTableId,
       target: r.targetTableId,
       sourceHandle: r.sourceColumnId,
       targetHandle: r.targetColumnId,
-      markerEnd: { type: MarkerType.ArrowClosed, color: isSelected ? '#a855f7' : '#6366f1' },
+      data: { 
+        semantic: r.semantic,
+        sourceName: sourceTable?.name || 'Unknown',
+        targetName: targetTable?.name || 'Unknown'
+      },
+      markerEnd: { type: MarkerType.ArrowClosed, color: isSelected ? '#a855f7' : color },
       style: { 
-        stroke: isSelected ? '#a855f7' : '#6366f1', 
+        stroke: isSelected ? '#a855f7' : color, 
         strokeWidth: isSelected ? 3 : 2,
         filter: isSelected ? 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.6))' : 'none'
       },
-      animated: isSelected,
+      animated: isSelected || r.semantic === 'trigger' || r.semantic === 'activity',
     };
   }), [relationships, selectedRelationshipId]);
 
@@ -158,6 +278,22 @@ export default function SchemaCanvas() {
       const colName = (targetColumn && targetColumn.id !== 'table-target' ? targetColumn.name : sourceColumn.name).toLowerCase();
       setCustomFKName(`${baseName}_${colName}`);
     }
+
+    // Infer semantic
+    if (targetTable) {
+      const name = targetTable.name.toLowerCase();
+      if (name.includes('shipment') || name.includes('payment') || name.includes('billing')) {
+        setSemantic('trigger');
+      } else if (name.includes('alert') || name.includes('fraud') || name.includes('risk')) {
+        setSemantic('risk');
+      } else if (name.includes('event') || name.includes('log') || name.includes('activity')) {
+        setSemantic('activity');
+      } else if (name.includes('subscription') || name.includes('enrollment')) {
+        setSemantic('lifecycle');
+      } else {
+        setSemantic('connection');
+      }
+    }
   }, [tables]);
 
   const confirmRelationship = () => {
@@ -170,6 +306,7 @@ export default function SchemaCanvas() {
         type: relType,
         createFKColumn: createFK,
         fkColumnName: customFKName,
+        semantic: semantic
       });
     }
     setPendingConnection(null);
@@ -180,7 +317,7 @@ export default function SchemaCanvas() {
   const sourceColumn = sourceTable?.columns.find(c => c.id === pendingConnection?.sourceHandle);
 
   return (
-    <div className="w-full h-full bg-slate-50">
+    <div className="w-full h-full bg-slate-50 relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -188,11 +325,14 @@ export default function SchemaCanvas() {
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
       >
         <Background color="#cbd5e1" gap={20} />
         <Controls />
       </ReactFlow>
+
+      <Legend />
 
       <AnimatePresence>
         {pendingConnection && (
@@ -228,6 +368,22 @@ export default function SchemaCanvas() {
                 </div>
 
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">System Semantic</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(Object.entries(SEMANTIC_LABELS) as [RelationshipSemantic, string][]).map(([key, label]) => (
+                        <button 
+                          key={key}
+                          onClick={() => setSemantic(key)}
+                          className={`p-2 text-[10px] font-bold uppercase rounded-md border transition-all flex items-center gap-2 ${semantic === key ? 'bg-slate-50 border-slate-300 text-slate-800 shadow-inner' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
+                        >
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: SEMANTIC_COLORS[key] }} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Relationship Type</label>
                     <div className="grid grid-cols-2 gap-2">

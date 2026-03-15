@@ -39,6 +39,7 @@ export default function PreviewPanel() {
     selectedRootRecordId,
     setSelectedRootRecordId,
     simulation,
+    updateSimulation,
     calculateForecast
   } = useSchemaStore();
 

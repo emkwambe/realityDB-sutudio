@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { faker } from '@faker-js/faker';
+import { Table, Column, Relationship, SimulationConfig, DataType, GrowthCurve, RealityTemplate, RelationshipSemantic } from './types';
 
-export type DataType = 'uuid' | 'string' | 'integer' | 'decimal' | 'boolean' | 'timestamp' | 'email' | 'name' | 'phone' | 'enum';
-export type GrowthCurve = 'linear' | 'exponential' | 'logarithmic' | 's-curve';
+export { type Table, type Column, type Relationship, type SimulationConfig, type DataType, type GrowthCurve };
 
 export const TYPE_STRATEGIES: Record<DataType, string[]> = {
   uuid: ['uuid'],
@@ -17,54 +17,6 @@ export const TYPE_STRATEGIES: Record<DataType, string[]> = {
   phone: ['phone'],
   enum: ['enum'],
 };
-
-export interface Column {
-  id: string;
-  name: string;
-  type: DataType;
-  isPK: boolean;
-  isFK: boolean;
-  fkTarget?: { tableId: string; columnId: string };
-  nullable: boolean;
-  strategy: string;
-  options: {
-    min?: number;
-    max?: number;
-    values?: string[];
-    weights?: number[];
-    dependsOn?: string; // ID of another column in the same table
-    dependencyRule?: 'after' | 'before' | 'match';
-    lifecycleRules?: {
-      value: string;
-      requiredFields?: string[];
-      nullFields?: string[];
-    }[];
-    [key: string]: any;
-  };
-}
-
-export interface Table {
-  id: string;
-  name: string;
-  columns: Column[];
-  position: { x: number; y: number };
-}
-
-export interface Relationship {
-  id: string;
-  sourceTableId: string;
-  sourceColumnId: string;
-  targetTableId: string;
-  targetColumnId: string;
-  type: 'one-to-many' | 'one-to-one';
-}
-
-export interface SimulationConfig {
-  seed: number;
-  timelineDays: number;
-  growthCurve: GrowthCurve;
-  anomalyRate: number;
-}
 
 interface SchemaState {
   tables: Table[];
@@ -104,11 +56,14 @@ interface SchemaState {
     type: 'one-to-many' | 'one-to-one';
     createFKColumn: boolean;
     fkColumnName?: string;
+    semantic?: RelationshipSemantic;
   }) => void;
+  updateRelationship: (id: string, updates: Partial<Relationship>) => void;
   removeRelationship: (id: string) => void;
   
   setSelected: (tableId: string | null, columnId: string | null) => void;
   setSelectedRelationship: (id: string | null) => void;
+  loadTemplate: (template: RealityTemplate) => void;
 }
 
 export const useSchemaStore = create<SchemaState>()(
@@ -130,6 +85,16 @@ export const useSchemaStore = create<SchemaState>()(
 
       setPreviewMode: (mode) => set({ previewMode: mode }),
       setSelectedRootRecordId: (id) => set({ selectedRootRecordId: id }),
+      loadTemplate: (template) => set({
+        tables: template.tables,
+        relationships: template.relationships,
+        simulation: template.simulation,
+        selectedTableId: null,
+        selectedColumnId: null,
+        selectedRelationshipId: null,
+        selectedRootRecordId: null,
+        previewMode: 'table'
+      }),
   calculateForecast: () => {
     const { tables, simulation, relationships } = get();
     const days = simulation.timelineDays;
@@ -324,7 +289,7 @@ export const useSchemaStore = create<SchemaState>()(
         relationships: [...state.relationships, rel],
       })),
 
-      createRelationshipWithFK: ({ sourceTableId, sourceColumnId, targetTableId, targetColumnId, type, createFKColumn, fkColumnName }) => set((state) => {
+      createRelationshipWithFK: ({ sourceTableId, sourceColumnId, targetTableId, targetColumnId, type, createFKColumn, fkColumnName, semantic }) => set((state) => {
         let finalTargetColumnId = targetColumnId;
         const sourceTable = state.tables.find(t => t.id === sourceTableId);
         const sourceColumn = sourceTable?.columns.find(c => c.id === sourceColumnId);
@@ -367,6 +332,7 @@ export const useSchemaStore = create<SchemaState>()(
           targetTableId,
           targetColumnId: finalTargetColumnId,
           type,
+          semantic: semantic || 'connection'
         };
 
         return {
@@ -377,6 +343,11 @@ export const useSchemaStore = create<SchemaState>()(
 
       removeRelationship: (id) => set((state) => ({
         relationships: state.relationships.filter((r) => r.id !== id),
+        selectedRelationshipId: state.selectedRelationshipId === id ? null : state.selectedRelationshipId,
+      })),
+
+      updateRelationship: (id, updates) => set((state) => ({
+        relationships: state.relationships.map((r) => r.id === id ? { ...r, ...updates } : r),
       })),
 
       setSelected: (tableId, columnId) => set({ 
@@ -496,63 +467,4 @@ const generateValue = (col: Column, allTables: Table[], projectContext: Record<s
     }
     default: return faker.lorem.word();
   }
-};
-
-export const DOMAIN_TEMPLATES = {
-  SaaS: [
-    {
-      name: 'users',
-      columns: [
-        { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'email', type: 'email', strategy: 'email' },
-        { name: 'full_name', type: 'name', strategy: 'name' },
-        { name: 'created_at', type: 'timestamp', strategy: 'past_date' },
-      ]
-    },
-    {
-      name: 'organizations',
-      columns: [
-        { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'name', type: 'string', strategy: 'random_string' },
-        { name: 'plan', type: 'enum', strategy: 'enum', options: { values: ['free', 'pro', 'enterprise'], weights: [70, 20, 10] } },
-      ]
-    },
-    {
-      name: 'subscriptions',
-      columns: [
-        { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'status', type: 'enum', strategy: 'enum', options: { values: ['active', 'cancelled', 'trial'], weights: [70, 20, 10] } },
-        { name: 'started_at', type: 'timestamp', strategy: 'past_date' },
-        { name: 'ended_at', type: 'timestamp', strategy: 'future_date', options: { dependsOn: 'started_at', dependencyRule: 'after' } },
-      ]
-    }
-  ],
-  Ecommerce: [
-    {
-      name: 'customers',
-      columns: [
-        { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'email', type: 'email', strategy: 'email' },
-        { name: 'name', type: 'name', strategy: 'name' },
-      ]
-    },
-    {
-      name: 'products',
-      columns: [
-        { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'sku', type: 'string', strategy: 'random_string' },
-        { name: 'price', type: 'decimal', strategy: 'decimal', options: { min: 10, max: 500 } },
-        { name: 'category', type: 'enum', strategy: 'enum', options: { values: ['electronics', 'clothing', 'home', 'beauty'] } },
-      ]
-    },
-    {
-      name: 'orders',
-      columns: [
-        { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'status', type: 'enum', strategy: 'enum', options: { values: ['created', 'paid', 'shipped', 'delivered'], weights: [10, 20, 30, 40] } },
-        { name: 'total', type: 'decimal', strategy: 'decimal' },
-        { name: 'created_at', type: 'timestamp', strategy: 'past_date' },
-      ]
-    }
-  ]
 };
