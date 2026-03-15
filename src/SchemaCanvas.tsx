@@ -264,6 +264,11 @@ export default function SchemaCanvas() {
     });
   }, [updateTable]);
 
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    // We don't currently store edge positions/state externally beyond the relationship itself
+    // but handling this prevents ReactFlow from complaining or looping on selection
+  }, []);
+
   const onConnect = useCallback((params: Connection) => {
     setPendingConnection(params);
     
@@ -322,6 +327,7 @@ export default function SchemaCanvas() {
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}

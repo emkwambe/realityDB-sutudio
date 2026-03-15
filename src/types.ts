@@ -29,6 +29,7 @@ export interface Column {
 export interface Table {
   id: string;
   name: string;
+  description?: string;
   columns: Column[];
   position: { x: number; y: number };
 }

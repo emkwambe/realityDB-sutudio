@@ -7,7 +7,7 @@ export { type Table, type Column, type Relationship, type SimulationConfig, type
 
 export const TYPE_STRATEGIES: Record<DataType, string[]> = {
   uuid: ['uuid'],
-  string: ['random_string', 'name', 'email', 'phone', 'enum'],
+  string: ['random_string', 'name', 'company_name', 'email', 'phone', 'enum'],
   integer: ['integer', 'auto_increment'],
   decimal: ['decimal'],
   boolean: ['boolean'],
@@ -44,6 +44,7 @@ interface SchemaState {
   removeTable: (id: string) => void;
   
   addColumn: (tableId: string, column: Partial<Column>) => void;
+  bulkAddColumns: (tableId: string, columns: Partial<Column>[]) => void;
   updateColumn: (tableId: string, columnId: string, updates: Partial<Column>) => void;
   removeColumn: (tableId: string, columnId: string) => void;
   
@@ -230,6 +231,34 @@ export const useSchemaStore = create<SchemaState>()(
         }),
       })),
 
+      bulkAddColumns: (tableId, columns) => set((state) => ({
+        tables: state.tables.map((t) => {
+          if (t.id === tableId) {
+            const newCols = columns.map(col => ({
+              id: crypto.randomUUID(),
+              name: col.name,
+              type: col.type || 'string',
+              isPK: col.strategy === 'uuid',
+              isFK: false,
+              nullable: false,
+              strategy: col.strategy || 'random_string',
+              options: {},
+              ...col,
+            }));
+
+            // Filter out duplicates
+            const existingNames = new Set(t.columns.map(c => c.name));
+            const filteredNewCols = newCols.filter(c => !existingNames.has(c.name));
+
+            return {
+              ...t,
+              columns: [...t.columns, ...filteredNewCols],
+            };
+          }
+          return t;
+        }),
+      })),
+
       updateColumn: (tableId, columnId, updates) => set((state) => ({
         tables: state.tables.map((t) => {
           if (t.id === tableId) {
@@ -367,6 +396,73 @@ export const useSchemaStore = create<SchemaState>()(
   )
 );
 
+export const validateSchema = (tables: Table[], relationships: Relationship[], updateColumn: any) => {
+  const issues: any[] = [];
+
+  tables.forEach(table => {
+    const fkTargets = new Set<string>();
+    
+    table.columns.forEach(col => {
+      // 1. Incomplete Relationships
+      if (col.isFK && !col.fkTarget) {
+        issues.push({
+          id: `incomplete-fk-${table.id}-${col.id}`,
+          type: 'error',
+          message: `Column "${col.name}" in "${table.name}" is marked as FK but has no target.`,
+          tableId: table.id,
+          columnId: col.id
+        });
+      }
+
+      // 2. Duplicate FKs
+      if (col.fkTarget) {
+        const targetKey = `${col.fkTarget.tableId}`;
+        if (fkTargets.has(targetKey)) {
+          issues.push({
+            id: `duplicate-fk-${table.id}-${targetKey}`,
+            type: 'warning',
+            message: `Table "${table.name}" has multiple FKs pointing to the same target table.`,
+            tableId: table.id,
+            columnId: col.id
+          });
+        }
+        fkTargets.add(targetKey);
+
+        // 3. Missing Relationship Entry
+        const hasRel = relationships.some(r => 
+          r.targetTableId === table.id && r.targetColumnId === col.id
+        );
+        if (!hasRel) {
+          issues.push({
+            id: `missing-rel-${table.id}-${col.id}`,
+            type: 'warning',
+            message: `FK column "${col.name}" exists but no relationship is defined.`,
+            tableId: table.id,
+            columnId: col.id
+          });
+        }
+      }
+
+      // 4. Semantic Mismatch
+      if (col.name.toLowerCase().includes('name') && col.strategy === 'random_string') {
+        issues.push({
+          id: `semantic-mismatch-${table.id}-${col.id}`,
+          type: 'info',
+          message: `Column "${col.name}" could use a more specific strategy like "name" or "company_name".`,
+          tableId: table.id,
+          columnId: col.id,
+          fix: () => {
+            const strategy = col.name.toLowerCase().includes('company') ? 'company_name' : 'name';
+            updateColumn(table.id, col.id, { strategy });
+          }
+        });
+      }
+    });
+  });
+
+  return issues;
+};
+
 // Data Generation Logic
 export const generateGhostRows = (table: Table, count: number = 5, allTables: Table[], projectContext: Record<string, any[]> = {}) => {
   const rows: any[] = [];
@@ -441,6 +537,7 @@ const generateValue = (col: Column, allTables: Table[], projectContext: Record<s
   switch (col.strategy) {
     case 'uuid': return faker.string.uuid().slice(0, 8);
     case 'name': return faker.person.fullName();
+    case 'company_name': return faker.company.name();
     case 'email': return faker.internet.email();
     case 'phone': return faker.phone.number();
     case 'timestamp': return faker.date.recent().toISOString().split('T')[0];

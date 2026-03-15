@@ -1,7 +1,23 @@
-import React from 'react';
-import { useSchemaStore, TYPE_STRATEGIES } from './store';
+import React, { useState, useMemo } from 'react';
+import { useSchemaStore, TYPE_STRATEGIES, validateSchema } from './store';
 import { DataType, SEMANTIC_COLORS, SEMANTIC_LABELS, RelationshipSemantic } from './types';
-import { Settings, Trash2, AlertCircle, Clock, RefreshCw, Layers, Plus, Link, Database } from 'lucide-react';
+import { 
+  Settings, 
+  Trash2, 
+  AlertCircle, 
+  Clock, 
+  RefreshCw, 
+  Layers, 
+  Plus, 
+  Link, 
+  Database,
+  Sparkles,
+  Wand2,
+  BookOpen,
+  HelpCircle
+} from 'lucide-react';
+import { suggestColumns, suggestTableDescription } from './services/ai';
+import { motion, AnimatePresence } from 'motion/react';
 
 const DATA_TYPES: DataType[] = ['uuid', 'string', 'integer', 'decimal', 'boolean', 'timestamp', 'email', 'name', 'phone', 'enum'];
 
@@ -35,20 +51,128 @@ export default function Inspector() {
     relationships,
     selectedRelationshipId,
     updateRelationship,
-    removeRelationship
+    removeRelationship,
+    bulkAddColumns,
+    setSelected
   } = useSchemaStore();
+
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const selectedTable = tables.find(t => t.id === selectedTableId);
   const selectedColumn = selectedTable?.columns.find(c => c.id === selectedColumnId);
   const selectedRelationship = relationships.find(r => r.id === selectedRelationshipId);
 
   const availableStrategies = selectedColumn ? TYPE_STRATEGIES[selectedColumn.type] : [];
+  
+  const issues = useMemo(() => 
+    validateSchema(tables, relationships, updateColumn),
+  [tables, relationships, updateColumn]);
 
   if (!selectedTable && !selectedRelationship) {
     return (
-      <div className="w-80 border-l border-slate-200 bg-white flex flex-col items-center justify-center p-8 text-center">
-        <Settings size={48} className="text-slate-200 mb-4" />
-        <p className="text-slate-400 text-sm">Select a table, column, or relationship to inspect properties</p>
+      <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
+        <div className="p-4 border-b border-slate-100 bg-slate-50">
+          <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+            <Settings size={16} className="text-indigo-600" />
+            RealityDB Studio
+          </h2>
+        </div>
+        
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/50">
+          <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-6 border border-slate-100">
+            <Database size={32} className="text-indigo-500" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-800 mb-2">Ready to Design</h3>
+          <p className="text-xs text-slate-500 leading-relaxed mb-8">
+            Select a table or relationship to configure its properties and simulation logic.
+          </p>
+          
+          <div className="w-full space-y-3">
+            <a 
+              href="/docs/README.md"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-sm transition-all text-left group"
+            >
+              <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                <BookOpen size={16} className="text-indigo-600" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-800">User Guides</div>
+                <div className="text-[10px] text-slate-400">Learn how to use the studio</div>
+              </div>
+            </a>
+            
+            <div className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl text-left opacity-60">
+              <div className="p-2 bg-emerald-50 rounded-lg">
+                <HelpCircle size={16} className="text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-800">Simulation Logic</div>
+                <div className="text-[10px] text-slate-400">Coming soon</div>
+              </div>
+            </div>
+          </div>
+
+          {issues.length > 0 && (
+            <div className="w-full mt-8 space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <AlertCircle size={14} className="text-amber-500" />
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Realism Audit</h4>
+              </div>
+              <div className="space-y-2">
+                {issues.map((issue: any) => (
+                  <div 
+                    key={issue.id}
+                    className={`p-3 rounded-xl border text-left transition-all hover:shadow-sm cursor-pointer ${
+                      issue.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
+                      issue.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-800' :
+                      'bg-blue-50 border-blue-100 text-blue-800'
+                    }`}
+                    onClick={() => {
+                      if (issue.tableId) {
+                        setSelected(issue.tableId, issue.columnId || null);
+                      }
+                    }}
+                  >
+                    <div className="flex gap-2">
+                      <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[11px] font-semibold leading-tight">{issue.message}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-[9px] opacity-70 uppercase font-bold tracking-tighter">
+                            {issue.type} • Click to inspect
+                          </p>
+                          {issue.fix && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                issue.fix();
+                              }}
+                              className="text-[9px] font-bold bg-white/50 px-1.5 py-0.5 rounded hover:bg-white transition-colors"
+                            >
+                              FIX
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 border-t border-slate-100 bg-white">
+          <div className="flex items-center justify-between text-[10px] font-medium text-slate-400">
+            <span>v1.0.4 Premium</span>
+            <span className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Engine Active
+            </span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -147,17 +271,67 @@ export default function Inspector() {
       <div className="p-4 space-y-6">
         {/* Table Properties */}
         <section>
-          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Table Properties</h3>
-          <div className="space-y-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Table Properties</h3>
+            {selectedTable && (
+              <button
+                onClick={async () => {
+                  setIsAiLoading(true);
+                  const suggested = await suggestColumns(selectedTable.name);
+                  if (suggested.length > 0) {
+                    bulkAddColumns(selectedTable.id, suggested);
+                  }
+                  setIsAiLoading(false);
+                }}
+                disabled={isAiLoading}
+                className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 disabled:opacity-50 transition-all"
+              >
+                {isAiLoading ? (
+                  <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Sparkles size={12} />
+                )}
+                AI SUGGEST
+              </button>
+            )}
+          </div>
+          
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Table Name</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Name</label>
               <input 
                 type="text"
                 value={selectedTable.name}
                 onChange={(e) => updateTable(selectedTable.id, { name: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
               />
             </div>
+            
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase">Description</label>
+                <button 
+                  onClick={async () => {
+                    setIsAiLoading(true);
+                    const desc = await suggestTableDescription(selectedTable.name, selectedTable.columns.map(c => c.name));
+                    updateTable(selectedTable.id, { description: desc });
+                    setIsAiLoading(false);
+                  }}
+                  className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600"
+                >
+                  AI Write
+                </button>
+              </div>
+              <textarea 
+                value={selectedTable.description || ''}
+                onChange={(e) => updateTable(selectedTable.id, { description: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white text-slate-600 leading-relaxed"
+                placeholder="Describe the purpose of this table..."
+              />
+            </div>
+          </div>
+        </section>
 
             <div className="pt-2">
               <label className="block text-xs font-medium text-slate-600 mb-2">Relationships</label>
@@ -215,8 +389,6 @@ export default function Inspector() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
 
         {/* Column Properties */}
         {selectedColumn ? (
@@ -225,7 +397,8 @@ export default function Inspector() {
               <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Column Properties</h3>
               <button 
                 onClick={() => removeColumn(selectedTable.id, selectedColumn.id)}
-                className="text-slate-400 hover:text-red-500 transition-colors"
+                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                title="Delete Column"
               >
                 <Trash2 size={14} />
               </button>
@@ -233,56 +406,65 @@ export default function Inspector() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Column Name</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Name</label>
                 <input 
                   type="text"
                   value={selectedColumn.name}
                   onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Data Type</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Data Type</label>
                 <select 
                   value={selectedColumn.type}
                   onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { type: e.target.value as DataType })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
                 >
                   {DATA_TYPES.map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
                 </select>
               </div>
 
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div className="flex items-center gap-6 py-1">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedColumn.isPK ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                    {selectedColumn.isPK && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
                   <input 
                     type="checkbox"
                     checked={selectedColumn.isPK}
                     onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { isPK: e.target.checked })}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="hidden"
                   />
-                  <span className="text-xs font-medium text-slate-600">Primary Key</span>
+                  <span className="text-xs font-semibold text-slate-600">Primary Key</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedColumn.nullable ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 group-hover:border-indigo-400'}`}>
+                    {selectedColumn.nullable && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
                   <input 
                     type="checkbox"
                     checked={selectedColumn.nullable}
                     onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { nullable: e.target.checked })}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="hidden"
                   />
-                  <span className="text-xs font-medium text-slate-600">Nullable</span>
+                  <span className="text-xs font-semibold text-slate-600">Nullable</span>
                 </label>
               </div>
 
               <div className="pt-4 border-t border-slate-100">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Realism Strategy</h4>
-                <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <Wand2 size={12} className="text-indigo-500" />
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Realism Strategy</h4>
+                </div>
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Strategy</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Strategy</label>
                     <select 
                       value={selectedColumn.strategy}
                       onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { strategy: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
                     >
                       {availableStrategies.map(s => <option key={s} value={s}>{STRATEGY_LABELS[s] || s}</option>)}
                     </select>

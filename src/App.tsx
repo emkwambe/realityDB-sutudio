@@ -11,7 +11,8 @@ import {
   Settings, 
   Play,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -62,6 +63,15 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <a 
+              href="/docs/README.md"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-all"
+            >
+              <BookOpen size={14} />
+              Docs
+            </a>
             <button className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-all">
               <Upload size={14} />
               Import

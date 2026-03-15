@@ -36,20 +36,20 @@ export const REALITY_TEMPLATES: RealityTemplate[] = [
     tables: [
       createTable('organizations', 100, 100, [
         { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'name', type: 'string', strategy: 'random_string' },
+        { name: 'name', type: 'string', strategy: 'company_name' },
         { name: 'plan', type: 'enum', strategy: 'enum', options: { values: ['free', 'pro', 'enterprise'], weights: [60, 30, 10] } },
         { name: 'created_at', type: 'timestamp', strategy: 'past_date' },
       ]),
       createTable('users', 500, 100, [
         { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'org_id', type: 'uuid', isFK: true, strategy: 'uuid' },
+        { name: 'organization_id', type: 'uuid', isFK: true, strategy: 'uuid' },
         { name: 'email', type: 'email', strategy: 'email' },
         { name: 'full_name', type: 'name', strategy: 'name' },
         { name: 'role', type: 'enum', strategy: 'enum', options: { values: ['admin', 'member', 'viewer'], weights: [10, 70, 20] } },
       ]),
       createTable('subscriptions', 100, 400, [
         { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'org_id', type: 'uuid', isFK: true, strategy: 'uuid' },
+        { name: 'organization_id', type: 'uuid', isFK: true, strategy: 'uuid' },
         { name: 'status', type: 'enum', strategy: 'enum', options: { 
           values: ['trial', 'active', 'cancelled'], 
           weights: [15, 75, 10],
@@ -62,7 +62,7 @@ export const REALITY_TEMPLATES: RealityTemplate[] = [
       ]),
       createTable('payments', 500, 400, [
         { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'sub_id', type: 'uuid', isFK: true, strategy: 'uuid' },
+        { name: 'subscription_id', type: 'uuid', isFK: true, strategy: 'uuid' },
         { name: 'amount', type: 'decimal', strategy: 'decimal', options: { min: 20, max: 500 } },
         { name: 'status', type: 'enum', strategy: 'enum', options: { values: ['succeeded', 'failed', 'refunded'], weights: [95, 4, 1] } },
         { name: 'paid_at', type: 'timestamp', strategy: 'past_date' },
@@ -161,7 +161,7 @@ export const REALITY_TEMPLATES: RealityTemplate[] = [
     tables: [
       createTable('suppliers', 100, 100, [
         { name: 'id', type: 'uuid', isPK: true, strategy: 'uuid' },
-        { name: 'name', type: 'string', strategy: 'random_string' },
+        { name: 'name', type: 'string', strategy: 'company_name' },
         { name: 'country', type: 'enum', strategy: 'enum', options: { values: ['China', 'Vietnam', 'Germany', 'USA', 'Mexico'] } },
       ]),
       createTable('purchase_orders', 500, 100, [
@@ -315,9 +315,18 @@ const populateRelationships = (template: RealityTemplate) => {
   template.tables.forEach(targetTable => {
     targetTable.columns.forEach(targetCol => {
       if (targetCol.isFK) {
-        // Infer target table from column name (e.g., org_id -> organizations)
-        const targetTableName = targetCol.name.split('_')[0] + 's';
-        const sourceTable = template.tables.find(t => t.name === targetTableName || t.name === targetCol.name.replace('_id', 's'));
+        // Infer target table from column name
+        const prefix = targetCol.name.split('_')[0];
+        const possibleNames = [
+          prefix + 's',
+          prefix + 'es',
+          prefix === 'org' ? 'organizations' : '',
+          prefix === 'sub' ? 'subscriptions' : '',
+          targetCol.name.replace('_id', 's'),
+          targetCol.name.replace('_id', 'es')
+        ].filter(Boolean);
+
+        const sourceTable = template.tables.find(t => possibleNames.includes(t.name));
         
         if (sourceTable) {
           const sourceCol = sourceTable.columns.find(c => c.isPK);
