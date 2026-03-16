@@ -1,22 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { useSchemaStore, TYPE_STRATEGIES, validateSchema } from './store';
 import { DataType, SEMANTIC_COLORS, SEMANTIC_LABELS, RelationshipSemantic } from './types';
-import { 
-  Settings, 
-  Trash2, 
-  AlertCircle, 
-  Clock, 
-  RefreshCw, 
-  Layers, 
-  Plus, 
-  Link, 
+import {
+  Settings,
+  Trash2,
+  AlertCircle,
+  Clock,
+  RefreshCw,
+  Layers,
+  Plus,
+  Link,
   Database,
   Sparkles,
   Wand2,
   BookOpen,
   HelpCircle
 } from 'lucide-react';
-import { suggestColumns, suggestTableDescription, generateSystem, explainSystem, suggestRelationships, generateTemplateMetadata } from './services/ai';
+import { getSuggestedColumns } from './services/smartDefaults';
 import { motion, AnimatePresence } from 'motion/react';
 
 const DATA_TYPES: DataType[] = ['uuid', 'string', 'integer', 'decimal', 'boolean', 'timestamp', 'email', 'name', 'phone', 'enum'];
@@ -35,15 +35,16 @@ const STRATEGY_LABELS: Record<string, string> = {
   boolean: 'Boolean',
   enum: 'Enum Values',
   random_string: 'Random String',
+  company_name: 'Company Name',
 };
 
 export default function Inspector() {
-  const { 
-    tables, 
-    selectedTableId, 
-    selectedColumnId, 
-    updateTable, 
-    updateColumn, 
+  const {
+    tables,
+    selectedTableId,
+    selectedColumnId,
+    updateTable,
+    updateColumn,
     removeColumn,
     simulation,
     updateSimulation,
@@ -54,79 +55,27 @@ export default function Inspector() {
     removeRelationship,
     bulkAddColumns,
     setSelected,
-    applyAiGeneratedSystem
   } = useSchemaStore();
-
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
-  const [suggestedRels, setSuggestedRels] = useState<any[]>([]);
-  const [aiTemplate, setAiTemplate] = useState<any>(null);
 
   const selectedTable = tables.find(t => t.id === selectedTableId);
   const selectedColumn = selectedTable?.columns.find(c => c.id === selectedColumnId);
   const selectedRelationship = relationships.find(r => r.id === selectedRelationshipId);
 
   const availableStrategies = selectedColumn ? TYPE_STRATEGIES[selectedColumn.type] : [];
-  
-  const issues = useMemo(() => 
+
+  const issues = useMemo(() =>
     validateSchema(tables, relationships, updateColumn),
   [tables, relationships, updateColumn]);
 
-  const handleGenerateSystem = async () => {
-    if (!aiPrompt) return;
-    setIsAiLoading(true);
-    try {
-      const system = await generateSystem(aiPrompt);
-      applyAiGeneratedSystem(system);
-      setAiPrompt('');
-    } catch (error) {
-      console.error('AI Generation failed', error);
-    }
-    setIsAiLoading(false);
-  };
+  // Smart suggestions for current table
+  const suggestions = useMemo(() => {
+    if (!selectedTable) return [];
+    return getSuggestedColumns(selectedTable.name);
+  }, [selectedTable]);
 
-  const handleExplainSystem = async () => {
-    setIsAiLoading(true);
-    try {
-      const explanation = await explainSystem(tables, relationships);
-      setAiExplanation(explanation);
-    } catch (error) {
-      console.error('AI Explanation failed', error);
-    }
-    setIsAiLoading(false);
-  };
+  const hasOnlyPK = selectedTable && selectedTable.columns.length <= 1 && selectedTable.columns.every(c => c.isPK);
 
-  const handleSuggestRelationships = async () => {
-    if (!selectedTable) return;
-    setIsAiLoading(true);
-    try {
-      const existingTableNames = tables.map(t => t.name);
-      const suggestions = await suggestRelationships(selectedTable.name, existingTableNames);
-      setSuggestedRels(suggestions);
-    } catch (error) {
-      console.error('AI Relationship suggestion failed', error);
-    }
-    setIsAiLoading(false);
-  };
-
-  const handleCreateTemplate = async () => {
-    setIsAiLoading(true);
-    try {
-      const metadata = await generateTemplateMetadata(tables);
-      const template = {
-        ...metadata,
-        tables,
-        relationships,
-        simulation
-      };
-      setAiTemplate(template);
-    } catch (error) {
-      console.error('AI Template generation failed', error);
-    }
-    setIsAiLoading(false);
-  };
-
+  // ── Empty state (nothing selected) ──
   if (!selectedTable && !selectedRelationship) {
     return (
       <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
@@ -136,110 +85,8 @@ export default function Inspector() {
             RealityDB Studio
           </h2>
         </div>
-        
+
         <div className="flex-1 p-4 space-y-6">
-          {/* AI Assistant Section */}
-          <section className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-indigo-600" />
-              <h3 className="text-xs font-bold text-indigo-900 uppercase tracking-wider">AI System Assistant</h3>
-            </div>
-            
-            <div className="space-y-3">
-              <p className="text-[10px] text-indigo-700 leading-relaxed">
-                Describe a system to generate a complete model, or ask for an explanation of your current architecture.
-              </p>
-              
-              <textarea 
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="e.g., I need a pet daycare management system..."
-                rows={3}
-                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-400"
-              />
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  onClick={handleGenerateSystem}
-                  disabled={isAiLoading || !aiPrompt}
-                  className="flex items-center justify-center gap-2 p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
-                >
-                  {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                  GENERATE
-                </button>
-                <button 
-                  onClick={handleExplainSystem}
-                  disabled={isAiLoading || tables.length === 0}
-                  className="flex items-center justify-center gap-2 p-2 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
-                >
-                  {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <BookOpen size={12} />}
-                  EXPLAIN
-                </button>
-              </div>
-
-              <button 
-                onClick={handleCreateTemplate}
-                disabled={isAiLoading || tables.length === 0}
-                className="w-full flex items-center justify-center gap-2 p-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
-              >
-                {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
-                CREATE TEMPLATE
-              </button>
-            </div>
-
-            <AnimatePresence>
-              {aiExplanation && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="p-3 bg-white border border-indigo-100 rounded-xl text-[10px] text-slate-600 leading-relaxed relative"
-                >
-                  <button 
-                    onClick={() => setAiExplanation(null)}
-                    className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"
-                  >
-                    ×
-                  </button>
-                  {aiExplanation}
-                </motion.div>
-              )}
-
-              {aiTemplate && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2 relative"
-                >
-                  <button 
-                    onClick={() => setAiTemplate(null)}
-                    className="absolute top-2 right-2 text-emerald-400 hover:text-emerald-600"
-                  >
-                    ×
-                  </button>
-                  <div className="text-[10px] font-bold text-emerald-800 uppercase">Template Draft Ready</div>
-                  <div className="text-[11px] font-bold text-slate-800">{aiTemplate.name}</div>
-                  <div className="text-[9px] text-slate-500 line-clamp-2">{aiTemplate.description}</div>
-                  <button 
-                    onClick={() => {
-                      const blob = new Blob([JSON.stringify(aiTemplate, null, 2)], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${aiTemplate.name.toLowerCase().replace(/\s+/g, '_')}_template.json`;
-                      a.click();
-                      setAiTemplate(null);
-                    }}
-                    className="w-full p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-bold transition-all"
-                  >
-                    DOWNLOAD JSON
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </section>
-
           <div className="flex flex-col items-center justify-center p-4 text-center">
             <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 border border-slate-100">
               <Database size={24} className="text-slate-400" />
@@ -249,9 +96,9 @@ export default function Inspector() {
               Select a table or relationship to configure its properties.
             </p>
           </div>
-          
+
           <div className="w-full space-y-3">
-            <a 
+            <a
               href="/docs/README.md"
               target="_blank"
               rel="noreferrer"
@@ -265,16 +112,6 @@ export default function Inspector() {
                 <div className="text-[10px] text-slate-400">Learn how to use the studio</div>
               </div>
             </a>
-            
-            <div className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl text-left opacity-60">
-              <div className="p-2 bg-emerald-50 rounded-lg">
-                <HelpCircle size={16} className="text-emerald-600" />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-800">Simulation Logic</div>
-                <div className="text-[10px] text-slate-400">Coming soon</div>
-              </div>
-            </div>
           </div>
 
           {issues.length > 0 && (
@@ -285,7 +122,7 @@ export default function Inspector() {
               </div>
               <div className="space-y-2">
                 {issues.map((issue: any) => (
-                  <div 
+                  <div
                     key={issue.id}
                     className={`p-3 rounded-xl border text-left transition-all hover:shadow-sm cursor-pointer ${
                       issue.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
@@ -293,9 +130,7 @@ export default function Inspector() {
                       'bg-blue-50 border-blue-100 text-blue-800'
                     }`}
                     onClick={() => {
-                      if (issue.tableId) {
-                        setSelected(issue.tableId, issue.columnId || null);
-                      }
+                      if (issue.tableId) setSelected(issue.tableId, issue.columnId || null);
                     }}
                   >
                     <div className="flex gap-2">
@@ -304,14 +139,11 @@ export default function Inspector() {
                         <p className="text-[11px] font-semibold leading-tight">{issue.message}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <p className="text-[9px] opacity-70 uppercase font-bold tracking-tighter">
-                            {issue.type} • Click to inspect
+                            {issue.type} - Click to inspect
                           </p>
                           {issue.fix && (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                issue.fix();
-                              }}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); issue.fix(); }}
                               className="text-[9px] font-bold bg-white/50 px-1.5 py-0.5 rounded hover:bg-white transition-colors"
                             >
                               FIX
@@ -326,20 +158,17 @@ export default function Inspector() {
             </div>
           )}
         </div>
-        
+
         <div className="p-4 border-t border-slate-100 bg-white">
-          <div className="flex items-center justify-between text-[10px] font-medium text-slate-400">
-            <span>v1.0.4 Premium</span>
-            <span className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Engine Active
-            </span>
+          <div className="text-[10px] font-medium text-slate-400 text-center">
+            RealityDB Studio
           </div>
         </div>
       </div>
     );
   }
 
+  // ── Relationship selected ──
   if (selectedRelationship) {
     const sourceTable = tables.find(t => t.id === selectedRelationship.sourceTableId);
     const targetTable = tables.find(t => t.id === selectedRelationship.targetTableId);
@@ -376,7 +205,7 @@ export default function Inspector() {
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
                 <span className="text-xs font-bold text-slate-700 uppercase">{SEMANTIC_LABELS[selectedRelationship.semantic || 'connection']}</span>
               </div>
-              
+
               <div className="grid grid-cols-1 gap-1">
                 {(Object.entries(SEMANTIC_LABELS) as [RelationshipSemantic, string][]).map(([key, label]) => (
                   <button
@@ -396,7 +225,7 @@ export default function Inspector() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
-                <select 
+                <select
                   value={selectedRelationship.type}
                   onChange={(e) => updateRelationship(selectedRelationship.id, { type: e.target.value as any })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -409,7 +238,7 @@ export default function Inspector() {
           </section>
 
           <section className="pt-6 border-t border-slate-100">
-            <button 
+            <button
               onClick={() => removeRelationship(selectedRelationship.id)}
               className="w-full flex items-center justify-center gap-2 p-2 text-red-600 hover:bg-red-50 rounded-md text-xs font-medium transition-all border border-transparent hover:border-red-100"
             >
@@ -422,6 +251,7 @@ export default function Inspector() {
     );
   }
 
+  // ── Table selected ──
   return (
     <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
       <div className="p-4 border-b border-slate-100 bg-slate-50">
@@ -436,58 +266,35 @@ export default function Inspector() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Table Properties</h3>
-            {selectedTable && (
+            {selectedTable && hasOnlyPK && suggestions.length > 0 && (
               <button
-                onClick={async () => {
-                  setIsAiLoading(true);
-                  const suggested = await suggestColumns(selectedTable.name);
-                  if (suggested.length > 0) {
-                    bulkAddColumns(selectedTable.id, suggested);
-                  }
-                  setIsAiLoading(false);
+                onClick={() => {
+                  bulkAddColumns(selectedTable.id, suggestions);
                 }}
-                disabled={isAiLoading}
-                className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 disabled:opacity-50 transition-all"
+                className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-all"
               >
-                {isAiLoading ? (
-                  <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Sparkles size={12} />
-                )}
-                AI SUGGEST
+                <Sparkles size={12} />
+                ADD SUGGESTED
               </button>
             )}
           </div>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Name</label>
-              <input 
+              <input
                 type="text"
-                value={selectedTable.name}
-                onChange={(e) => updateTable(selectedTable.id, { name: e.target.value })}
+                value={selectedTable!.name}
+                onChange={(e) => updateTable(selectedTable!.id, { name: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
               />
             </div>
-            
+
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase">Description</label>
-                <button 
-                  onClick={async () => {
-                    setIsAiLoading(true);
-                    const desc = await suggestTableDescription(selectedTable.name, selectedTable.columns.map(c => c.name));
-                    updateTable(selectedTable.id, { description: desc });
-                    setIsAiLoading(false);
-                  }}
-                  className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600"
-                >
-                  AI Write
-                </button>
-              </div>
-              <textarea 
-                value={selectedTable.description || ''}
-                onChange={(e) => updateTable(selectedTable.id, { description: e.target.value })}
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Description</label>
+              <textarea
+                value={selectedTable!.description || ''}
+                onChange={(e) => updateTable(selectedTable!.id, { description: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white text-slate-600 leading-relaxed"
                 placeholder="Describe the purpose of this table..."
@@ -496,154 +303,93 @@ export default function Inspector() {
           </div>
         </section>
 
-            <div className="pt-2">
-              <label className="block text-xs font-medium text-slate-600 mb-2">Relationships</label>
-              <div className="relative group">
-                <button 
-                  className="w-full py-3 px-4 bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm flex items-center justify-between transition-all shadow-sm group-hover:shadow-md"
-                >
-                  <div className="flex items-center gap-2">
-                    <Plus size={18} className="text-indigo-500" />
-                    <span>Create Relationship</span>
-                  </div>
-                  <span className="text-indigo-400 group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-                
-                <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all z-50">
-                  <div className="p-2 bg-slate-50 border-b border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Select Target Table</p>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto p-1">
-                    {tables.filter(t => t.id !== selectedTable.id).map(targetTable => (
-                      <button
-                        key={targetTable.id}
-                        onClick={() => {
-                          const pkCol = selectedTable.columns.find(c => c.isPK);
-                          if (pkCol) {
-                            createRelationshipWithFK({
-                              sourceTableId: selectedTable.id,
-                              sourceColumnId: pkCol.id,
-                              targetTableId: targetTable.id,
-                              targetColumnId: null,
-                              type: 'one-to-many',
-                              createFKColumn: true,
-                              fkColumnName: `${selectedTable.name.replace(/s$/, '').toLowerCase()}_id`,
-                              semantic: 'connection'
-                            });
-                          }
-                        }}
-                        className="w-full text-left p-3 hover:bg-indigo-50 rounded-lg flex items-center gap-3 transition-colors group/item"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover/item:bg-white transition-colors">
-                          <Database size={14} className="text-slate-400 group-hover/item:text-indigo-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-700 group-hover/item:text-indigo-700">{targetTable.name}</p>
-                          <p className="text-[10px] text-slate-400">Add FK to {targetTable.name}</p>
-                        </div>
-                      </button>
-                    ))}
-                    {tables.length <= 1 && (
-                      <div className="p-4 text-center">
-                        <p className="text-xs text-slate-400 italic">No other tables available to connect</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+        <div className="pt-2">
+          <label className="block text-xs font-medium text-slate-600 mb-2">Relationships</label>
+          <div className="relative group">
+            <button
+              className="w-full py-3 px-4 bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm flex items-center justify-between transition-all shadow-sm group-hover:shadow-md"
+            >
+              <div className="flex items-center gap-2">
+                <Plus size={18} className="text-indigo-500" />
+                <span>Create Relationship</span>
               </div>
+              <span className="text-indigo-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
+            </button>
 
-              {/* AI Relationship Suggestions */}
-              <div className="mt-4 space-y-3">
-                <button 
-                  onClick={handleSuggestRelationships}
-                  disabled={isAiLoading}
-                  className="w-full flex items-center justify-center gap-2 p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[10px] font-bold transition-all border border-indigo-100"
-                >
-                  {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  SUGGEST RELATIONSHIPS
-                </button>
-
-                <AnimatePresence>
-                  {suggestedRels.length > 0 && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="space-y-2"
-                    >
-                      <div className="flex items-center justify-between px-1">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">AI Suggestions</span>
-                        <button onClick={() => setSuggestedRels([])} className="text-[9px] text-slate-400 hover:text-slate-600">Clear</button>
-                      </div>
-                      {suggestedRels.map((rel, idx) => {
-                        const targetTable = tables.find(t => t.name === rel.targetTable);
-                        if (!targetTable) return null;
-                        
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              const pkCol = selectedTable.columns.find(c => c.isPK);
-                              if (pkCol) {
-                                createRelationshipWithFK({
-                                  sourceTableId: selectedTable.id,
-                                  sourceColumnId: pkCol.id,
-                                  targetTableId: targetTable.id,
-                                  targetColumnId: null,
-                                  type: rel.type,
-                                  createFKColumn: true,
-                                  fkColumnName: `${selectedTable.name.replace(/s$/, '').toLowerCase()}_id`,
-                                  semantic: rel.semantic
-                                });
-                                setSuggestedRels(prev => prev.filter((_, i) => i !== idx));
-                              }
-                            }}
-                            className="w-full text-left p-2 bg-white border border-slate-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/30 transition-all group"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-700">{rel.targetTable}</span>
-                              <Plus size={10} className="text-slate-400 group-hover:text-indigo-500" />
-                            </div>
-                            <div className="text-[9px] text-slate-400 capitalize">{rel.semantic} • {rel.type.replace(/-/g, ' ')}</div>
-                          </button>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all z-50">
+              <div className="p-2 bg-slate-50 border-b border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Select Target Table</p>
+              </div>
+              <div className="max-h-60 overflow-y-auto p-1">
+                {tables.filter(t => t.id !== selectedTable!.id).map(targetTable => (
+                  <button
+                    key={targetTable.id}
+                    onClick={() => {
+                      const pkCol = selectedTable!.columns.find(c => c.isPK);
+                      if (pkCol) {
+                        createRelationshipWithFK({
+                          sourceTableId: selectedTable!.id,
+                          sourceColumnId: pkCol.id,
+                          targetTableId: targetTable.id,
+                          targetColumnId: null,
+                          type: 'one-to-many',
+                          createFKColumn: true,
+                          fkColumnName: `${selectedTable!.name.replace(/s$/, '').toLowerCase()}_id`,
+                          semantic: 'connection',
+                        });
+                      }
+                    }}
+                    className="w-full text-left p-3 hover:bg-indigo-50 rounded-lg flex items-center gap-3 transition-colors group/item"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover/item:bg-white transition-colors">
+                      <Database size={14} className="text-slate-400 group-hover/item:text-indigo-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 group-hover/item:text-indigo-700">{targetTable.name}</p>
+                      <p className="text-[10px] text-slate-400">Add FK to {targetTable.name}</p>
+                    </div>
+                  </button>
+                ))}
+                {tables.length <= 1 && (
+                  <div className="p-4 text-center">
+                    <p className="text-xs text-slate-400 italic">No other tables available to connect</p>
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        </div>
 
         {/* Column Properties */}
         {selectedColumn ? (
           <section className="pt-6 border-t border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Column Properties</h3>
-              <button 
-                onClick={() => removeColumn(selectedTable.id, selectedColumn.id)}
+              <button
+                onClick={() => removeColumn(selectedTable!.id, selectedColumn.id)}
                 className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
                 title="Delete Column"
               >
                 <Trash2 size={14} />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Name</label>
-                <input 
+                <input
                   type="text"
                   value={selectedColumn.name}
-                  onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { name: e.target.value })}
+                  onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, { name: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
                 />
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Data Type</label>
-                <select 
+                <select
                   value={selectedColumn.type}
-                  onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { type: e.target.value as DataType })}
+                  onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, { type: e.target.value as DataType })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
                 >
                   {DATA_TYPES.map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
@@ -655,10 +401,10 @@ export default function Inspector() {
                   <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedColumn.isPK ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 group-hover:border-indigo-400'}`}>
                     {selectedColumn.isPK && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </div>
-                  <input 
+                  <input
                     type="checkbox"
                     checked={selectedColumn.isPK}
-                    onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { isPK: e.target.checked })}
+                    onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, { isPK: e.target.checked })}
                     className="hidden"
                   />
                   <span className="text-xs font-semibold text-slate-600">Primary Key</span>
@@ -667,10 +413,10 @@ export default function Inspector() {
                   <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedColumn.nullable ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 group-hover:border-indigo-400'}`}>
                     {selectedColumn.nullable && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </div>
-                  <input 
+                  <input
                     type="checkbox"
                     checked={selectedColumn.nullable}
-                    onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { nullable: e.target.checked })}
+                    onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, { nullable: e.target.checked })}
                     className="hidden"
                   />
                   <span className="text-xs font-semibold text-slate-600">Nullable</span>
@@ -685,9 +431,9 @@ export default function Inspector() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Strategy</label>
-                    <select 
+                    <select
                       value={selectedColumn.strategy}
-                      onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { strategy: e.target.value })}
+                      onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, { strategy: e.target.value })}
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-white font-medium text-slate-700"
                     >
                       {availableStrategies.map(s => <option key={s} value={s}>{STRATEGY_LABELS[s] || s}</option>)}
@@ -698,22 +444,22 @@ export default function Inspector() {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Min</label>
-                        <input 
+                        <input
                           type="number"
                           value={selectedColumn.options.min ?? ''}
-                          onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { 
-                            options: { ...selectedColumn.options, min: Number(e.target.value) } 
+                          onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, {
+                            options: { ...selectedColumn.options, min: Number(e.target.value) }
                           })}
                           className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Max</label>
-                        <input 
+                        <input
                           type="number"
                           value={selectedColumn.options.max ?? ''}
-                          onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { 
-                            options: { ...selectedColumn.options, max: Number(e.target.value) } 
+                          onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, {
+                            options: { ...selectedColumn.options, max: Number(e.target.value) }
                           })}
                           className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                         />
@@ -725,35 +471,35 @@ export default function Inspector() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Values (comma separated)</label>
-                        <input 
+                        <input
                           type="text"
                           value={selectedColumn.options.values?.join(', ') ?? ''}
-                          onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { 
-                            options: { ...selectedColumn.options, values: e.target.value.split(',').map(v => v.trim()) } 
+                          onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, {
+                            options: { ...selectedColumn.options, values: e.target.value.split(',').map(v => v.trim()) }
                           })}
                           placeholder="active, inactive, pending"
                           className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
-                      
+
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-medium text-slate-600">Distribution Weights (%)</label>
-                          <span className="text-[10px] text-slate-400">Sum: {selectedColumn.options.weights?.reduce((a, b) => a + b, 0) || 0}%</span>
+                          <span className="text-[10px] text-slate-400">Sum: {selectedColumn.options.weights?.reduce((a: number, b: number) => a + b, 0) || 0}%</span>
                         </div>
                         <div className="space-y-2">
-                          {(selectedColumn.options.values || []).map((val, idx) => (
+                          {(selectedColumn.options.values || []).map((val: string, idx: number) => (
                             <div key={idx} className="flex items-center gap-2">
                               <span className="text-[10px] text-slate-400 w-16 truncate">{val}</span>
-                              <input 
+                              <input
                                 type="number"
                                 value={selectedColumn.options.weights?.[idx] ?? ''}
                                 onChange={(e) => {
                                   const newWeights = [...(selectedColumn.options.weights || [])];
                                   while (newWeights.length < (selectedColumn.options.values?.length || 0)) newWeights.push(0);
                                   newWeights[idx] = Number(e.target.value);
-                                  updateColumn(selectedTable.id, selectedColumn.id, { 
-                                    options: { ...selectedColumn.options, weights: newWeights } 
+                                  updateColumn(selectedTable!.id, selectedColumn.id, {
+                                    options: { ...selectedColumn.options, weights: newWeights }
                                   });
                                 }}
                                 className="flex-1 px-2 py-1 border border-slate-200 rounded text-[10px] outline-none focus:ring-1 focus:ring-indigo-500"
@@ -775,15 +521,15 @@ export default function Inspector() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Depends On</label>
-                        <select 
+                        <select
                           value={selectedColumn.options.dependsOn || ''}
-                          onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { 
-                            options: { ...selectedColumn.options, dependsOn: e.target.value } 
+                          onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, {
+                            options: { ...selectedColumn.options, dependsOn: e.target.value }
                           })}
                           className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                         >
                           <option value="">None</option>
-                          {selectedTable.columns
+                          {selectedTable!.columns
                             .filter(c => c.id !== selectedColumn.id && c.type === 'timestamp')
                             .map(c => <option key={c.id} value={c.name}>{c.name}</option>)
                           }
@@ -792,10 +538,10 @@ export default function Inspector() {
                       {selectedColumn.options.dependsOn && (
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Rule</label>
-                          <select 
+                          <select
                             value={selectedColumn.options.dependencyRule || 'after'}
-                            onChange={(e) => updateColumn(selectedTable.id, selectedColumn.id, { 
-                              options: { ...selectedColumn.options, dependencyRule: e.target.value as any } 
+                            onChange={(e) => updateColumn(selectedTable!.id, selectedColumn.id, {
+                              options: { ...selectedColumn.options, dependencyRule: e.target.value as any }
                             })}
                             className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                           >
@@ -815,44 +561,44 @@ export default function Inspector() {
                         Lifecycle Semantics
                       </div>
                       <div className="space-y-4">
-                        {(selectedColumn.options.values || []).map((val, idx) => (
+                        {(selectedColumn.options.values || []).map((val: string, idx: number) => (
                           <div key={idx} className="p-2 bg-slate-50 rounded border border-slate-100 space-y-2">
                             <div className="text-[10px] font-bold text-slate-500 uppercase">{val}</div>
                             <div>
                               <label className="block text-[10px] font-medium text-slate-600 mb-1">Nullify Fields</label>
                               <div className="flex flex-wrap gap-1">
-                                {selectedTable.columns
+                                {selectedTable!.columns
                                   .filter(c => c.id !== selectedColumn.id)
                                   .map(c => {
                                     const currentRules = selectedColumn.options.lifecycleRules || [];
-                                    const rule = currentRules.find(r => r.value === val);
+                                    const rule = currentRules.find((r: any) => r.value === val);
                                     const isNulled = rule?.nullFields?.includes(c.name);
-                                    
+
                                     return (
                                       <button
                                         key={c.id}
                                         onClick={() => {
                                           const newRules = [...currentRules];
-                                          let ruleIdx = newRules.findIndex(r => r.value === val);
+                                          let ruleIdx = newRules.findIndex((r: any) => r.value === val);
                                           if (ruleIdx === -1) {
                                             newRules.push({ value: val, nullFields: [] });
                                             ruleIdx = newRules.length - 1;
                                           }
-                                          
+
                                           const nullFields = newRules[ruleIdx].nullFields || [];
                                           if (isNulled) {
-                                            newRules[ruleIdx].nullFields = nullFields.filter(f => f !== c.name);
+                                            newRules[ruleIdx].nullFields = nullFields.filter((f: string) => f !== c.name);
                                           } else {
                                             newRules[ruleIdx].nullFields = [...nullFields, c.name];
                                           }
-                                          
-                                          updateColumn(selectedTable.id, selectedColumn.id, {
+
+                                          updateColumn(selectedTable!.id, selectedColumn.id, {
                                             options: { ...selectedColumn.options, lifecycleRules: newRules }
                                           });
                                         }}
                                         className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${
-                                          isNulled 
-                                            ? 'bg-red-50 border-red-200 text-red-600' 
+                                          isNulled
+                                            ? 'bg-red-50 border-red-200 text-red-600'
                                             : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                         }`}
                                       >
@@ -887,10 +633,10 @@ export default function Inspector() {
                 <RefreshCw size={12} />
                 Engine Config
               </div>
-              
+
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Deterministic Seed</label>
-                <input 
+                <input
                   type="number"
                   value={simulation.seed}
                   onChange={(e) => updateSimulation({ seed: parseInt(e.target.value) || 0 })}
@@ -900,7 +646,7 @@ export default function Inspector() {
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Timeline Duration (Days)</label>
-                <input 
+                <input
                   type="number"
                   value={simulation.timelineDays}
                   onChange={(e) => updateSimulation({ timelineDays: parseInt(e.target.value) || 1 })}
@@ -908,47 +654,48 @@ export default function Inspector() {
                 />
               </div>
 
-              <div className="pt-2 space-y-4">
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+              <details className="pt-2">
+                <summary className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase cursor-pointer select-none">
                   <Layers size={12} />
-                  Growth Dynamics
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Growth Curve</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['linear', 'exponential', 'logarithmic', 's-curve'] as const).map(curve => (
-                      <button
-                        key={curve}
-                        onClick={() => updateSimulation({ growthCurve: curve })}
-                        className={`px-2 py-2 text-[10px] font-bold uppercase rounded border transition-all ${
-                          simulation.growthCurve === curve 
-                            ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
-                            : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                        }`}
-                      >
-                        {curve}
-                      </button>
-                    ))}
+                  Advanced: Growth Dynamics
+                </summary>
+                <div className="mt-3 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Growth Curve</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['linear', 'exponential', 'logarithmic', 's-curve'] as const).map(curve => (
+                        <button
+                          key={curve}
+                          onClick={() => updateSimulation({ growthCurve: curve })}
+                          className={`px-2 py-2 text-[10px] font-bold uppercase rounded border transition-all ${
+                            simulation.growthCurve === curve
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                              : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                          }`}
+                        >
+                          {curve}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Anomaly Injection Rate</label>
-                  <input 
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={simulation.anomalyRate * 100}
-                    onChange={(e) => updateSimulation({ anomalyRate: parseInt(e.target.value) / 100 })}
-                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                    <span>Stable</span>
-                    <span>{(simulation.anomalyRate * 100).toFixed(0)}% Chaos</span>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Anomaly Injection Rate</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={simulation.anomalyRate * 100}
+                      onChange={(e) => updateSimulation({ anomalyRate: parseInt(e.target.value) / 100 })}
+                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                      <span>Stable</span>
+                      <span>{(simulation.anomalyRate * 100).toFixed(0)}% Chaos</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </details>
             </div>
           </div>
         )}

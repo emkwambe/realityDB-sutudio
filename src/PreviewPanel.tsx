@@ -1,51 +1,47 @@
 import React, { useMemo } from 'react';
 import { useSchemaStore, generateGhostRows } from './store';
-import { 
-  Table as TableIcon, 
-  Network, 
-  Clock, 
-  BarChart3, 
-  Download, 
+import {
+  Table as TableIcon,
+  Network,
+  BarChart3,
+  Download,
   RefreshCw,
   User,
   Package,
   ShoppingCart,
-  CreditCard,
-  Mail,
-  ArrowRight,
   Database
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell
 } from 'recharts';
+import { convertToCliTemplate, downloadJSON, generateConfigSkeleton } from './services/exportCLI';
 
 export default function PreviewPanel() {
-  const { 
-    tables, 
-    relationships, 
-    selectedTableId, 
-    previewMode, 
+  const {
+    tables,
+    relationships,
+    selectedTableId,
+    previewMode,
     setPreviewMode,
     selectedRootRecordId,
     setSelectedRootRecordId,
     simulation,
-    updateSimulation,
     calculateForecast
   } = useSchemaStore();
 
   const ghostRows = useMemo(() => {
     const projectContext: Record<string, any[]> = {};
-    
+
     // Pass 1: Generate PKs
     tables.forEach(table => {
       projectContext[table.id] = generateGhostRows(table, 15, tables, {});
@@ -69,7 +65,7 @@ export default function PreviewPanel() {
 
   const relatedData = useMemo(() => {
     if (!activeRootRecord || !rootTable) return [];
-    
+
     return relationships
       .filter(rel => rel.sourceTableId === rootTable.id)
       .map(rel => {
@@ -89,116 +85,48 @@ export default function PreviewPanel() {
     }));
   }, [forecast]);
 
-  // Temporal Timeline Logic
-  const timelineEvents = useMemo(() => {
-    if (!activeRootRecord) return [];
-    
-    const events: any[] = [];
-    const dateFields = Object.entries(activeRootRecord).filter(([k, v]) => v instanceof Date || (typeof v === 'string' && !isNaN(Date.parse(v)) && k.includes('_at')));
-    
-    dateFields.forEach(([key, val]) => {
-      events.push({
-        date: new Date(val as any).toLocaleDateString(),
-        timestamp: new Date(val as any).getTime(),
-        event: key.replace(/_/g, ' ').toUpperCase(),
-        detail: `System event recorded for ${activeRootRecord.email || activeRootRecord.id}`,
-        icon: key.includes('created') ? <User size={16} /> : key.includes('order') ? <ShoppingCart size={16} /> : <Clock size={16} />,
-        color: key.includes('created') ? 'bg-indigo-500' : key.includes('ended') ? 'bg-red-500' : 'bg-emerald-500'
-      });
-    });
-
-    // Add related events
-    relatedData.forEach(rel => {
-      rel.rows.forEach(row => {
-        const rowDateFields = Object.entries(row).filter(([k, v]) => v instanceof Date || (typeof v === 'string' && !isNaN(Date.parse(v)) && k.includes('_at')));
-        rowDateFields.forEach(([key, val]) => {
-          events.push({
-            date: new Date(val as any).toLocaleDateString(),
-            timestamp: new Date(val as any).getTime(),
-            event: `${rel.table?.name}: ${key.replace(/_/g, ' ')}`.toUpperCase(),
-            detail: `Related activity in ${rel.table?.name}`,
-            icon: <Package size={16} />,
-            color: 'bg-amber-500'
-          });
-        });
-      });
-    });
-
-    return events.sort((a, b) => a.timestamp - b.timestamp);
-  }, [activeRootRecord, relatedData]);
-
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-  const exportRealityPack = () => {
-    const pack = {
-      version: '1.0.0',
-      name: 'RealityPack Export',
-      schema: {
-        tables,
-        relationships,
-      },
-      simulation,
-    };
-    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'RealityPack.json';
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportForCLI = () => {
+    const template = convertToCliTemplate(tables, relationships, simulation);
+    downloadJSON(template, 'realitydb-template.json');
+    downloadJSON(generateConfigSkeleton(), 'realitydb-config.json');
   };
 
   return (
     <div className="h-full flex flex-col bg-white border-t border-slate-200">
       <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-slate-50/50">
         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-          <button 
+          <button
             onClick={() => setPreviewMode('table')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'table' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <TableIcon size={14} />
             Data Grid
           </button>
-          <button 
+          <button
             onClick={() => setPreviewMode('system')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'system' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Network size={14} />
             System Explorer
           </button>
-          <button 
-            onClick={() => setPreviewMode('temporal')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'temporal' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Clock size={14} />
-            Temporal
-          </button>
-          <button 
+          <button
             onClick={() => setPreviewMode('forecast')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'forecast' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <BarChart3 size={14} />
             Forecast
           </button>
-          <button 
-            onClick={() => setPreviewMode('flow')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${previewMode === 'flow' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <ArrowRight size={14} />
-            System Flow
-          </button>
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-all">
-            <RefreshCw size={14} />
-          </button>
-          <button 
-            onClick={exportRealityPack}
+          <button
+            onClick={handleExportForCLI}
             className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-medium transition-all shadow-sm"
           >
             <Download size={14} />
-            Export RealityPack
+            Export for CLI
           </button>
         </div>
       </div>
@@ -206,7 +134,7 @@ export default function PreviewPanel() {
       <div className="flex-1 overflow-hidden relative">
         <AnimatePresence mode="wait">
           {previewMode === 'table' && (
-            <motion.div 
+            <motion.div
               key="table"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -233,7 +161,7 @@ export default function PreviewPanel() {
                       <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                         {selectedTable.columns.map(col => (
                           <td key={col.id} className="py-3 px-4 text-xs text-slate-600 font-mono">
-                            {String(row[col.name])}
+                            {row[col.name] === null ? <span className="text-slate-300 italic">NULL</span> : String(row[col.name])}
                           </td>
                         ))}
                       </tr>
@@ -250,7 +178,7 @@ export default function PreviewPanel() {
           )}
 
           {previewMode === 'system' && (
-            <motion.div 
+            <motion.div
               key="system"
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -266,8 +194,8 @@ export default function PreviewPanel() {
                     key={record.id}
                     onClick={() => setSelectedRootRecordId(record.id)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all border ${
-                      selectedRootRecordId === record.id 
-                        ? 'bg-white border-indigo-200 shadow-sm ring-1 ring-indigo-50' 
+                      selectedRootRecordId === record.id
+                        ? 'bg-white border-indigo-200 shadow-sm ring-1 ring-indigo-50'
                         : 'border-transparent hover:bg-white hover:border-slate-200'
                     }`}
                   >
@@ -308,7 +236,7 @@ export default function PreviewPanel() {
                             {rel.rows.length} Records
                           </span>
                         </div>
-                        
+
                         <div className="space-y-2">
                           {rel.rows.slice(0, 3).map((row, j) => (
                             <div key={j} className="bg-white p-3 rounded-xl border border-slate-100 text-[10px] font-mono text-slate-500 flex items-center justify-between">
@@ -331,69 +259,8 @@ export default function PreviewPanel() {
             </motion.div>
           )}
 
-          {previewMode === 'temporal' && (
-            <motion.div 
-              key="temporal"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="h-full p-8 overflow-y-auto bg-slate-50/30"
-            >
-              <div className="max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-6">
-                    <div>
-                      <h2 className="text-xl font-bold text-slate-800">Temporal Lifecycle</h2>
-                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Simulating: {activeRootRecord?.email || activeRootRecord?.id}</p>
-                    </div>
-                    <div className="h-8 w-px bg-slate-100"></div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">Scrub Timeline</span>
-                      <input 
-                        type="range"
-                        min="1"
-                        max="365"
-                        value={simulation.timelineDays}
-                        onChange={(e) => updateSimulation({ timelineDays: parseInt(e.target.value) })}
-                        className="w-48 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                      />
-                      <span className="text-xs font-mono font-bold text-indigo-600">{simulation.timelineDays}d</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="relative">
-                  <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-slate-200"></div>
-                  
-                  <div className="space-y-12">
-                    {timelineEvents.length > 0 ? timelineEvents.map((item, i) => (
-                      <div key={i} className="relative flex items-start gap-12 group">
-                        <div className={`z-10 w-12 h-12 rounded-2xl ${item.color} text-white flex items-center justify-center shadow-lg shadow-slate-200 group-hover:scale-110 transition-transform`}>
-                          {item.icon}
-                        </div>
-                        <div className="flex-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm group-hover:shadow-md transition-all">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.date}</span>
-                            <ArrowRight size={14} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
-                          </div>
-                          <h4 className="text-lg font-bold text-slate-800">{item.event}</h4>
-                          <p className="text-sm text-slate-500">{item.detail}</p>
-                        </div>
-                      </div>
-                    )) : (
-                      <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4">
-                        <Clock size={48} strokeWidth={1} />
-                        <p className="text-sm">No temporal events found. Ensure you have timestamp columns with strategies.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
           {previewMode === 'forecast' && (
-            <motion.div 
+            <motion.div
               key="forecast"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -425,6 +292,11 @@ export default function PreviewPanel() {
                   </div>
                 </div>
 
+                {/* CLI command hint */}
+                <div className="bg-slate-800 rounded-xl p-4 font-mono text-sm text-emerald-400">
+                  <span className="text-slate-500">$</span> realitydb seed --template realitydb-template.json --records {Math.max(100, Math.floor(forecast.totalRows / tables.length))} --seed {simulation.seed}
+                </div>
+
                 <div className="grid grid-cols-2 gap-8">
                   <div className="bg-slate-50/50 rounded-3xl p-8 border border-slate-100">
                     <h4 className="text-sm font-bold text-slate-800 mb-8 flex items-center gap-2">
@@ -437,7 +309,7 @@ export default function PreviewPanel() {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                           <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                          <Tooltip 
+                          <Tooltip
                             contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                             cursor={{ fill: '#f1f5f9' }}
                           />
@@ -473,70 +345,6 @@ export default function PreviewPanel() {
                       </ResponsiveContainer>
                     </div>
                   </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-          {previewMode === 'flow' && (
-            <motion.div 
-              key="flow"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="h-full p-12 bg-slate-50/50 overflow-y-auto"
-            >
-              <div className="max-w-4xl mx-auto">
-                <div className="text-center mb-16">
-                  <h2 className="text-3xl font-bold text-slate-800 mb-2">System Dynamics</h2>
-                  <p className="text-slate-500">Visualizing cardinality and data flow across the relational graph</p>
-                </div>
-
-                <div className="flex flex-col items-center gap-8">
-                  {tables.map((table, idx) => {
-                    const tableForecast = forecast.tableForecasts.find(f => f.tableName === table.name);
-                    const rowCount = tableForecast?.rowCount || 0;
-                    
-                    return (
-                      <React.Fragment key={table.id}>
-                        <div className="w-full max-w-md bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                              <Database size={24} />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-slate-800">{table.name}</h4>
-                              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{table.columns.length} Columns</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-slate-800">{(rowCount / 1000).toFixed(1)}k</div>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase">Estimated Rows</p>
-                          </div>
-                        </div>
-                        
-                        {idx < tables.length - 1 && (() => {
-                          const nextTable = tables[idx + 1];
-                          const rel = relationships.find(r => 
-                            (r.sourceTableId === table.id && r.targetTableId === nextTable.id) ||
-                            (r.sourceTableId === nextTable.id && r.targetTableId === table.id)
-                          );
-                          
-                          const nextTableForecast = forecast.tableForecasts.find(f => f.tableName === nextTable.name);
-                          const nextRowCount = nextTableForecast?.rowCount || 0;
-                          const multiplier = rowCount > 0 ? (nextRowCount / rowCount).toFixed(1) : '1.0';
-
-                          return (
-                            <div className="flex flex-col items-center gap-2">
-                              <div className={`w-0.5 h-12 bg-gradient-to-b ${rel ? 'from-indigo-500 to-emerald-500' : 'from-slate-200 to-slate-200'} rounded-full`}></div>
-                              <div className="px-3 py-1 bg-white border border-slate-100 rounded-full text-[10px] font-bold text-slate-400 shadow-sm">
-                                {rel ? `${multiplier}x Multiplier` : 'No Direct Link'}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </React.Fragment>
-                    );
-                  })}
                 </div>
               </div>
             </motion.div>
