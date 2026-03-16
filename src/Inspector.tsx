@@ -57,6 +57,7 @@ export default function Inspector() {
     setSelected,
   } = useSchemaStore();
 
+  const [showRelDropdown, setShowRelDropdown] = React.useState(false);
   const selectedTable = tables.find(t => t.id === selectedTableId);
   const selectedColumn = selectedTable?.columns.find(c => c.id === selectedColumnId);
   const selectedRelationship = relationships.find(r => r.id === selectedRelationshipId);
@@ -75,7 +76,7 @@ export default function Inspector() {
 
   const hasOnlyPK = selectedTable && selectedTable.columns.length <= 1 && selectedTable.columns.every(c => c.isPK);
 
-  // ── Empty state (nothing selected) ──
+  // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Empty state (nothing selected) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
   if (!selectedTable && !selectedRelationship) {
     return (
       <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
@@ -168,7 +169,7 @@ export default function Inspector() {
     );
   }
 
-  // ── Relationship selected ──
+  // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Relationship selected ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
   if (selectedRelationship) {
     const sourceTable = tables.find(t => t.id === selectedRelationship.sourceTableId);
     const targetTable = tables.find(t => t.id === selectedRelationship.targetTableId);
@@ -251,7 +252,7 @@ export default function Inspector() {
     );
   }
 
-  // ── Table selected ──
+  // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Table selected ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
   return (
     <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
       <div className="p-4 border-b border-slate-100 bg-slate-50">
@@ -305,18 +306,19 @@ export default function Inspector() {
 
         <div className="pt-2">
           <label className="block text-xs font-medium text-slate-600 mb-2">Relationships</label>
-          <div className="relative group">
+          <div className="relative">
             <button
-              className="w-full py-3 px-4 bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm flex items-center justify-between transition-all shadow-sm group-hover:shadow-md"
+              onClick={() => setShowRelDropdown(!showRelDropdown)}
+              className="w-full py-3 px-4 bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm flex items-center justify-between transition-all shadow-sm"
             >
               <div className="flex items-center gap-2">
                 <Plus size={18} className="text-indigo-500" />
                 <span>Create Relationship</span>
               </div>
-              <span className="text-indigo-400 group-hover:translate-x-1 transition-transform">&rarr;</span>
+              <span className={`text-indigo-400 transition-transform ${showRelDropdown ? "rotate-90" : ""}`}>&rarr;</span>
             </button>
 
-            <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all z-50">
+            {showRelDropdown && <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden transition-all z-50">
               <div className="p-2 bg-slate-50 border-b border-slate-100">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Select Target Table</p>
               </div>
@@ -356,7 +358,7 @@ export default function Inspector() {
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
           </div>
         </div>
 
