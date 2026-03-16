@@ -238,10 +238,20 @@ export function generateSQLDDL(tables: Table[], relationships: Relationship[]): 
     const colDefs: string[] = [];
     const constraints: string[] = [];
 
+    // Collect columns that lifecycle rules may null
+    const lifecycleNullable = new Set<string>();
+    for (const c of table.columns) {
+      if (c.options.lifecycleRules) {
+        for (const rule of c.options.lifecycleRules as any[]) {
+          if (rule.nullFields) { for (const f of rule.nullFields) lifecycleNullable.add(f); }
+        }
+      }
+    }
+
     for (const col of table.columns) {
       let sqlType = typeMap[col.type] || 'VARCHAR(255)';
       let colLine = `  "${col.name}" ${sqlType}`;
-      if (!col.nullable) colLine += ' NOT NULL';
+      if (!col.nullable && !lifecycleNullable.has(col.name)) colLine += ' NOT NULL';
       if (col.isPK) colLine += ' PRIMARY KEY';
       if (col.isPK && col.type === 'uuid') colLine += ' DEFAULT gen_random_uuid()';
       colDefs.push(colLine);

@@ -42,7 +42,6 @@ export default function App() {
     if (!canExport) return;
     const template = convertToCliTemplate(tables, relationships, simulation);
     downloadJSON(template, 'realitydb-template.json');
-    downloadJSON(generateConfigSkeleton(), 'realitydb-config.json');
     setShowExport(false);
   };
 
