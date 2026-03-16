@@ -16,7 +16,7 @@ import {
   BookOpen,
   HelpCircle
 } from 'lucide-react';
-import { suggestColumns, suggestTableDescription } from './services/ai';
+import { suggestColumns, suggestTableDescription, generateSystem, explainSystem, suggestRelationships, generateTemplateMetadata } from './services/ai';
 import { motion, AnimatePresence } from 'motion/react';
 
 const DATA_TYPES: DataType[] = ['uuid', 'string', 'integer', 'decimal', 'boolean', 'timestamp', 'email', 'name', 'phone', 'enum'];
@@ -53,10 +53,15 @@ export default function Inspector() {
     updateRelationship,
     removeRelationship,
     bulkAddColumns,
-    setSelected
+    setSelected,
+    applyAiGeneratedSystem
   } = useSchemaStore();
 
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [suggestedRels, setSuggestedRels] = useState<any[]>([]);
+  const [aiTemplate, setAiTemplate] = useState<any>(null);
 
   const selectedTable = tables.find(t => t.id === selectedTableId);
   const selectedColumn = selectedTable?.columns.find(c => c.id === selectedColumnId);
@@ -68,6 +73,60 @@ export default function Inspector() {
     validateSchema(tables, relationships, updateColumn),
   [tables, relationships, updateColumn]);
 
+  const handleGenerateSystem = async () => {
+    if (!aiPrompt) return;
+    setIsAiLoading(true);
+    try {
+      const system = await generateSystem(aiPrompt);
+      applyAiGeneratedSystem(system);
+      setAiPrompt('');
+    } catch (error) {
+      console.error('AI Generation failed', error);
+    }
+    setIsAiLoading(false);
+  };
+
+  const handleExplainSystem = async () => {
+    setIsAiLoading(true);
+    try {
+      const explanation = await explainSystem(tables, relationships);
+      setAiExplanation(explanation);
+    } catch (error) {
+      console.error('AI Explanation failed', error);
+    }
+    setIsAiLoading(false);
+  };
+
+  const handleSuggestRelationships = async () => {
+    if (!selectedTable) return;
+    setIsAiLoading(true);
+    try {
+      const existingTableNames = tables.map(t => t.name);
+      const suggestions = await suggestRelationships(selectedTable.name, existingTableNames);
+      setSuggestedRels(suggestions);
+    } catch (error) {
+      console.error('AI Relationship suggestion failed', error);
+    }
+    setIsAiLoading(false);
+  };
+
+  const handleCreateTemplate = async () => {
+    setIsAiLoading(true);
+    try {
+      const metadata = await generateTemplateMetadata(tables);
+      const template = {
+        ...metadata,
+        tables,
+        relationships,
+        simulation
+      };
+      setAiTemplate(template);
+    } catch (error) {
+      console.error('AI Template generation failed', error);
+    }
+    setIsAiLoading(false);
+  };
+
   if (!selectedTable && !selectedRelationship) {
     return (
       <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
@@ -78,14 +137,118 @@ export default function Inspector() {
           </h2>
         </div>
         
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/50">
-          <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-6 border border-slate-100">
-            <Database size={32} className="text-indigo-500" />
+        <div className="flex-1 p-4 space-y-6">
+          {/* AI Assistant Section */}
+          <section className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-indigo-600" />
+              <h3 className="text-xs font-bold text-indigo-900 uppercase tracking-wider">AI System Assistant</h3>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-[10px] text-indigo-700 leading-relaxed">
+                Describe a system to generate a complete model, or ask for an explanation of your current architecture.
+              </p>
+              
+              <textarea 
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="e.g., I need a pet daycare management system..."
+                rows={3}
+                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-400"
+              />
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                  onClick={handleGenerateSystem}
+                  disabled={isAiLoading || !aiPrompt}
+                  className="flex items-center justify-center gap-2 p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
+                >
+                  {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                  GENERATE
+                </button>
+                <button 
+                  onClick={handleExplainSystem}
+                  disabled={isAiLoading || tables.length === 0}
+                  className="flex items-center justify-center gap-2 p-2 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
+                >
+                  {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <BookOpen size={12} />}
+                  EXPLAIN
+                </button>
+              </div>
+
+              <button 
+                onClick={handleCreateTemplate}
+                disabled={isAiLoading || tables.length === 0}
+                className="w-full flex items-center justify-center gap-2 p-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[10px] font-bold transition-all disabled:opacity-50"
+              >
+                {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+                CREATE TEMPLATE
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {aiExplanation && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-white border border-indigo-100 rounded-xl text-[10px] text-slate-600 leading-relaxed relative"
+                >
+                  <button 
+                    onClick={() => setAiExplanation(null)}
+                    className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"
+                  >
+                    ×
+                  </button>
+                  {aiExplanation}
+                </motion.div>
+              )}
+
+              {aiTemplate && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl space-y-2 relative"
+                >
+                  <button 
+                    onClick={() => setAiTemplate(null)}
+                    className="absolute top-2 right-2 text-emerald-400 hover:text-emerald-600"
+                  >
+                    ×
+                  </button>
+                  <div className="text-[10px] font-bold text-emerald-800 uppercase">Template Draft Ready</div>
+                  <div className="text-[11px] font-bold text-slate-800">{aiTemplate.name}</div>
+                  <div className="text-[9px] text-slate-500 line-clamp-2">{aiTemplate.description}</div>
+                  <button 
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(aiTemplate, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${aiTemplate.name.toLowerCase().replace(/\s+/g, '_')}_template.json`;
+                      a.click();
+                      setAiTemplate(null);
+                    }}
+                    className="w-full p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-bold transition-all"
+                  >
+                    DOWNLOAD JSON
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </section>
+
+          <div className="flex flex-col items-center justify-center p-4 text-center">
+            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 border border-slate-100">
+              <Database size={24} className="text-slate-400" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-800 mb-1">Ready to Design</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Select a table or relationship to configure its properties.
+            </p>
           </div>
-          <h3 className="text-sm font-bold text-slate-800 mb-2">Ready to Design</h3>
-          <p className="text-xs text-slate-500 leading-relaxed mb-8">
-            Select a table or relationship to configure its properties and simulation logic.
-          </p>
           
           <div className="w-full space-y-3">
             <a 
@@ -387,6 +550,67 @@ export default function Inspector() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* AI Relationship Suggestions */}
+              <div className="mt-4 space-y-3">
+                <button 
+                  onClick={handleSuggestRelationships}
+                  disabled={isAiLoading}
+                  className="w-full flex items-center justify-center gap-2 p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[10px] font-bold transition-all border border-indigo-100"
+                >
+                  {isAiLoading ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  SUGGEST RELATIONSHIPS
+                </button>
+
+                <AnimatePresence>
+                  {suggestedRels.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="space-y-2"
+                    >
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">AI Suggestions</span>
+                        <button onClick={() => setSuggestedRels([])} className="text-[9px] text-slate-400 hover:text-slate-600">Clear</button>
+                      </div>
+                      {suggestedRels.map((rel, idx) => {
+                        const targetTable = tables.find(t => t.name === rel.targetTable);
+                        if (!targetTable) return null;
+                        
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              const pkCol = selectedTable.columns.find(c => c.isPK);
+                              if (pkCol) {
+                                createRelationshipWithFK({
+                                  sourceTableId: selectedTable.id,
+                                  sourceColumnId: pkCol.id,
+                                  targetTableId: targetTable.id,
+                                  targetColumnId: null,
+                                  type: rel.type,
+                                  createFKColumn: true,
+                                  fkColumnName: `${selectedTable.name.replace(/s$/, '').toLowerCase()}_id`,
+                                  semantic: rel.semantic
+                                });
+                                setSuggestedRels(prev => prev.filter((_, i) => i !== idx));
+                              }
+                            }}
+                            className="w-full text-left p-2 bg-white border border-slate-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/30 transition-all group"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-700">{rel.targetTable}</span>
+                              <Plus size={10} className="text-slate-400 group-hover:text-indigo-500" />
+                            </div>
+                            <div className="text-[9px] text-slate-400 capitalize">{rel.semantic} • {rel.type.replace(/-/g, ' ')}</div>
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 

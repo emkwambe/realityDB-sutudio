@@ -65,6 +65,7 @@ interface SchemaState {
   setSelected: (tableId: string | null, columnId: string | null) => void;
   setSelectedRelationship: (id: string | null) => void;
   loadTemplate: (template: RealityTemplate) => void;
+  applyAiGeneratedSystem: (system: any) => void;
 }
 
 export const useSchemaStore = create<SchemaState>()(
@@ -96,6 +97,58 @@ export const useSchemaStore = create<SchemaState>()(
         selectedRootRecordId: null,
         previewMode: 'table'
       }),
+      applyAiGeneratedSystem: (system) => {
+        const tableMap: Record<string, string> = {};
+        const newTables: Table[] = system.tables.map((t: any, idx: number) => {
+          const id = crypto.randomUUID();
+          tableMap[t.name] = id;
+          return {
+            id,
+            name: t.name,
+            description: t.description,
+            columns: t.columns.map((c: any) => ({
+              id: crypto.randomUUID(),
+              name: c.name,
+              type: c.type,
+              isPK: c.isPK || false,
+              isFK: c.isFK || false,
+              nullable: c.nullable || false,
+              strategy: c.strategy,
+              options: {},
+            })),
+            position: { x: 100 + (idx % 3) * 300, y: 100 + Math.floor(idx / 3) * 250 },
+          };
+        });
+
+        const newRelationships: Relationship[] = system.relationships.map((r: any) => {
+          const sourceTableId = tableMap[r.sourceTable];
+          const targetTableId = tableMap[r.targetTable];
+          const sourceTable = newTables.find(t => t.id === sourceTableId);
+          const targetTable = newTables.find(t => t.id === targetTableId);
+          
+          const sourceColumnId = sourceTable?.columns.find(c => c.name === r.sourceColumn)?.id || sourceTable?.columns[0]?.id || '';
+          const targetColumnId = targetTable?.columns.find(c => c.name === r.targetColumn)?.id || targetTable?.columns[0]?.id || '';
+
+          return {
+            id: crypto.randomUUID(),
+            sourceTableId,
+            sourceColumnId,
+            targetTableId,
+            targetColumnId,
+            type: r.type,
+            semantic: r.semantic,
+          };
+        });
+
+        set({
+          tables: newTables,
+          relationships: newRelationships,
+          simulation: { ...get().simulation, ...system.simulation },
+          selectedTableId: null,
+          selectedColumnId: null,
+          selectedRelationshipId: null,
+        });
+      },
   calculateForecast: () => {
     const { tables, simulation, relationships } = get();
     const days = simulation.timelineDays;
