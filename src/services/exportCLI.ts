@@ -3,11 +3,11 @@ import type { Table, Relationship, SimulationConfig } from '../types';
 /** Maps Studio strategy names to RealityDB CLI strategy names */
 const STRATEGY_MAP: Record<string, string> = {
   uuid: 'uuid',
-  name: 'person_name',
+  name: 'full_name',
   company_name: 'company_name',
   email: 'email',
   phone: 'phone',
-  random_string: 'random_string',
+  random_string: 'text',
   integer: 'integer',
   decimal: 'float',
   boolean: 'boolean',
@@ -183,7 +183,7 @@ export function convertToCliTemplate(
       columns[col.name] = def;
     }
 
-    cliTables[table.name] = { columns };
+    cliTables[table.name] = { match: table.name, columns };
   }
 
   return {
