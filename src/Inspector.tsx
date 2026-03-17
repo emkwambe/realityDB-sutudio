@@ -58,6 +58,11 @@ export default function Inspector() {
   } = useSchemaStore();
 
   const [showRelDropdown, setShowRelDropdown] = React.useState(false);
+
+  React.useEffect(() => {
+    setShowRelDropdown(false);
+  }, [selectedTableId]);
+
   const selectedTable = tables.find(t => t.id === selectedTableId);
   const selectedColumn = selectedTable?.columns.find(c => c.id === selectedColumnId);
   const selectedRelationship = relationships.find(r => r.id === selectedRelationshipId);
@@ -76,7 +81,7 @@ export default function Inspector() {
 
   const hasOnlyPK = selectedTable && selectedTable.columns.length <= 1 && selectedTable.columns.every(c => c.isPK);
 
-  // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Empty state (nothing selected) ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
+  // ── Empty state (nothing selected) ──
   if (!selectedTable && !selectedRelationship) {
     return (
       <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
@@ -169,7 +174,7 @@ export default function Inspector() {
     );
   }
 
-  // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Relationship selected ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
+  // ── Relationship selected ──
   if (selectedRelationship) {
     const sourceTable = tables.find(t => t.id === selectedRelationship.sourceTableId);
     const targetTable = tables.find(t => t.id === selectedRelationship.targetTableId);
@@ -252,7 +257,7 @@ export default function Inspector() {
     );
   }
 
-  // ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Table selected ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬
+  // ── Table selected ──
   return (
     <div className="w-80 border-l border-slate-200 bg-white flex flex-col h-full overflow-y-auto">
       <div className="p-4 border-b border-slate-100 bg-slate-50">
@@ -315,10 +320,10 @@ export default function Inspector() {
                 <Plus size={18} className="text-indigo-500" />
                 <span>Create Relationship</span>
               </div>
-              <span className={`text-indigo-400 transition-transform ${showRelDropdown ? "rotate-90" : ""}`}>&rarr;</span>
+              <span className="text-indigo-400 transition-transform">&rarr;</span>
             </button>
 
-            {showRelDropdown && <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden transition-all z-50">
+            <div className={`absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden transition-all z-50 ${showRelDropdown ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
               <div className="p-2 bg-slate-50 border-b border-slate-100">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Select Target Table</p>
               </div>
@@ -327,16 +332,17 @@ export default function Inspector() {
                   <button
                     key={targetTable.id}
                     onClick={() => {
-                      const pkCol = selectedTable!.columns.find(c => c.isPK);
-                      if (pkCol) {
+                      const targetPkCol = targetTable.columns.find(c => c.isPK);
+                      if (targetPkCol) {
+                        setShowRelDropdown(false);
                         createRelationshipWithFK({
-                          sourceTableId: selectedTable!.id,
-                          sourceColumnId: pkCol.id,
-                          targetTableId: targetTable.id,
+                          sourceTableId: targetTable.id,
+                          sourceColumnId: targetPkCol.id,
+                          targetTableId: selectedTable!.id,
                           targetColumnId: null,
                           type: 'one-to-many',
                           createFKColumn: true,
-                          fkColumnName: `${selectedTable!.name.replace(/s$/, '').toLowerCase()}_id`,
+                          fkColumnName: `${targetTable.name.replace(/s$/, '').toLowerCase()}_id`,
                           semantic: 'connection',
                         });
                       }
@@ -348,7 +354,7 @@ export default function Inspector() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-slate-700 group-hover/item:text-indigo-700">{targetTable.name}</p>
-                      <p className="text-[10px] text-slate-400">Add FK to {targetTable.name}</p>
+                      <p className="text-[10px] text-slate-400">Add FK to {selectedTable!.name}</p>
                     </div>
                   </button>
                 ))}
@@ -358,7 +364,7 @@ export default function Inspector() {
                   </div>
                 )}
               </div>
-            </div>}
+            </div>
           </div>
         </div>
 

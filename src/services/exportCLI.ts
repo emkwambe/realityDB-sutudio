@@ -3,11 +3,11 @@ import type { Table, Relationship, SimulationConfig } from '../types';
 /** Maps Studio strategy names to RealityDB CLI strategy names */
 const STRATEGY_MAP: Record<string, string> = {
   uuid: 'uuid',
-  name: 'full_name',
+  name: 'person_name',
   company_name: 'company_name',
   email: 'email',
   phone: 'phone',
-  random_string: 'text',
+  random_string: 'random_string',
   integer: 'integer',
   decimal: 'float',
   boolean: 'boolean',
@@ -176,14 +176,14 @@ export function convertToCliTemplate(
         const targetTable = tableMap.get(col.fkTarget.tableId);
         const targetCol = targetTable?.columns.find(c => c.id === col.fkTarget?.columnId);
         if (targetTable && targetCol) {
-          def.foreignKey = { table: targetTable.name, column: targetCol.name };
+          def.foreignKey = { table: targetTable.name.trim(), column: targetCol.name.trim() };
         }
       }
 
-      columns[col.name] = def;
+      columns[col.name.trim()] = def;
     }
 
-    cliTables[table.name] = { match: table.name, columns };
+    cliTables[table.name.trim()] = { columns };
   }
 
   return {
@@ -235,23 +235,15 @@ export function generateSQLDDL(tables: Table[], relationships: Relationship[]): 
   };
 
   for (const table of tables) {
+    const tableName = table.name.trim();
     const colDefs: string[] = [];
     const constraints: string[] = [];
 
-    // Collect columns that lifecycle rules may null
-    const lifecycleNullable = new Set<string>();
-    for (const c of table.columns) {
-      if (c.options.lifecycleRules) {
-        for (const rule of c.options.lifecycleRules as any[]) {
-          if (rule.nullFields) { for (const f of rule.nullFields) lifecycleNullable.add(f); }
-        }
-      }
-    }
-
     for (const col of table.columns) {
+      const colName = col.name.trim();
       let sqlType = typeMap[col.type] || 'VARCHAR(255)';
-      let colLine = `  "${col.name}" ${sqlType}`;
-      if (!col.nullable && !lifecycleNullable.has(col.name)) colLine += ' NOT NULL';
+      let colLine = `  "${colName}" ${sqlType}`;
+      if (!col.nullable) colLine += ' NOT NULL';
       if (col.isPK) colLine += ' PRIMARY KEY';
       if (col.isPK && col.type === 'uuid') colLine += ' DEFAULT gen_random_uuid()';
       colDefs.push(colLine);
@@ -261,14 +253,14 @@ export function generateSQLDDL(tables: Table[], relationships: Relationship[]): 
         const targetCol = targetTable?.columns.find(c => c.id === col.fkTarget?.columnId);
         if (targetTable && targetCol) {
           constraints.push(
-            `  CONSTRAINT "fk_${table.name}_${col.name}" FOREIGN KEY ("${col.name}") REFERENCES "${targetTable.name}"("${targetCol.name}")`
+            `  CONSTRAINT "fk_${tableName}_${colName}" FOREIGN KEY ("${colName}") REFERENCES "${targetTable.name.trim()}"("${targetCol.name.trim()}")`
           );
         }
       }
     }
 
     const allDefs = [...colDefs, ...constraints].join(',\n');
-    lines.push(`CREATE TABLE "${table.name}" (\n${allDefs}\n);\n`);
+    lines.push(`CREATE TABLE "${tableName}" (\n${allDefs}\n);\n`);
   }
 
   return lines.join('\n');
